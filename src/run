@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [ $# -eq 2 ]
+  then
+    javac Client.java
+    java Client $1 $2
+fi
+
+if [ $# -eq 1 ]
+  then
+    javac Server.java
+    java Server $1
+fi
