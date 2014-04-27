@@ -14,15 +14,15 @@ class TCPServer {
 				new InputStreamReader(connectionSocket.getInputStream()));
 		DataOutputStream outToClient = new DataOutputStream(
 				connectionSocket.getOutputStream());
-		while (true) {
+		//while (true) {
 			
 			clientSentence = inFromClient.readLine();
 			System.out.println("Received: " + clientSentence);
 			capitalizedSentence = clientSentence.toUpperCase() + '\n';
 			outToClient.writeBytes(capitalizedSentence);
 			connectionSocket.shutdownInput();
-		}
+		//}
 			
-			//while(true){ }
+			while(true){ }
 	}
 }
