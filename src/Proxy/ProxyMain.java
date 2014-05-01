@@ -11,22 +11,26 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 public class ProxyMain {
-	public static void main(String[] args) {
 	
+	public static void main(String[] args) {
 		ServerSocket clientListener;
 		try {
+			// Listen for connections at the port given on the command line
 			clientListener = new ServerSocket(Integer.parseInt(args[0]));
+			// Loop, accepting new connections and sending them off to their own 
+			// connection handling thread
 			while (true) {
 				Socket clientConnection = clientListener.accept();
 				ConnectionThread connection = new ConnectionThread(clientConnection);
 				(new Thread(connection)).start();
 			}
 		} catch (NumberFormatException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println("Could not interpret the given port number as a number.");
+			System.out.println("Perhaps format is incorrect. Please try again. Error message:");
+			System.out.println(e.getMessage());
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println("Error while accepting client connections:");
+			System.out.println(e.getMessage());
 		}
 		
 
