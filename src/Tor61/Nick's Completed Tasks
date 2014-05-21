@@ -1,0 +1,17 @@
+What I did today (5/20):
+
+1. Began coding router initialization including:
+	- Initializing the routing table
+	- Creating a listening thread to accept connections to other Tor61 nodes
+	- Registering the router with the registration service
+2. Moved the registration code into the router class
+	- The router must be registered before it can create a circuit (it can create a connection to itself, so it must
+	be registered). 
+	- The registration service is used only for moving data in between routers - this is not the job of the parent 
+	node but of its router functionality
+	- Node code becomes cleaner
+3. Created custom class to use in the Map<RoutingTableKey, Connection>
+	- Used Connection class because both RouterConnection and ProxyConnections will be endpoints.
+	- Made the map synchronized to safely handle access by multiple RouterConnection threads
+	- Overwrote HashCode and Equals methods to ensure that the class behaves as we expect
+4. Fetch all registered routers
