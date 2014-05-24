@@ -94,31 +94,6 @@ public class Router {
 		
 	}
 	
-	/*
-	 * @param openerAgentID, a HEX-value int that specifies the ID of this agent
-	 * @param openedAgentID, a HEX-value int that specifies the ID of the agent
-	 * 		  that this wants to connect to.
-	 * @returns byte[], a 512-byte cell that can be sent on the network.
-	 * 		  Any extra space at the end of the cell is padded with zeroes.
-	 */
-	private byte[] createOpenCell(String openerAgentID, String openedAgentID) {
-		int openerAgentIDHex = Integer.parseInt(openerAgentID, 16);
-		int openedAgentIDHex = Integer.parseInt(openedAgentID, 16);
-		System.out.println("Creating open cell for openerAgentID, openedAgentID: " + 
-							openerAgentID + ", " + openedAgentID);
-		byte[] message = new byte[512];
-		message[0] = 0;
-		message[1] = 0;
-		message[2] = 0x5;
-		message[3] = (byte) ((openerAgentIDHex & 0xff00) >> 8);
-		message[4] = (byte) (openerAgentIDHex & 0x00ff);
-		message[5] = (byte) ((openedAgentIDHex & 0xff00) >> 8);
-		message[6] = (byte) (openedAgentIDHex & 0x00ff);
-		return message;
-	}
-	
-	
-	
 	// Private class used in the routing table storing the necessary information
 	// for keys in the table
 	private class RoutingTableKey {
