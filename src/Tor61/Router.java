@@ -1,6 +1,7 @@
 package Tor61;
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -21,7 +22,7 @@ import registrationProtocol.RegistrationHandler;
 public class Router {
 	
 	public Map<RoutingTableKey, Connection> routingTable;
-	public RouterConnection circuitBeginning;
+	public RouterConnection thisCircuit;
 	
 	// Passed in reference to containing node, host name of registration service, and the port
 	// to contact the registration service at.
@@ -76,45 +77,49 @@ public class Router {
 				System.out.println(s);
 			}
 		}
+		
+		// Get the randomly chosen neighbor Tor node
 		String[] neighbor = routers[neighborToChoose];
 		try {
-			System.out.println("Creating socket to neighbor node");
+			System.out.println("Creating socket to random neighbor node");
 			Socket neighborSocket = new Socket(neighbor[0], Integer.parseInt(neighbor[1]));
-			RouterConnection neighborConnection = new RouterConnection(neighborSocket);
-			circuitBeginning = neighborConnection;
+			thisCircuit = new RouterConnection(neighborSocket);
+			
+			// Testing that the connection works
+			BufferedReader inFromUser = new BufferedReader(new InputStreamReader(
+					System.in));
+			DataOutputStream outToServer = new DataOutputStream(
+					neighborSocket.getOutputStream());
+			BufferedReader inFromServer = new BufferedReader(new InputStreamReader(
+					neighborSocket.getInputStream()));
+			String sentence;
+			String modifiedSentence;
+			while(true) {
+				sentence = inFromUser.readLine();
+				if (sentence.equals("close")) {
+					neighborSocket.close();
+					System.exit(0);
+				}
+				System.out.println("Now writing");
+				outToServer.writeBytes(sentence + '\n');
+				System.out.println("Now reading");
+				modifiedSentence = inFromServer.readLine();
+				System.out.println("FROM SERVER: " + modifiedSentence);
+			}
+			
 		} catch (NumberFormatException | IOException e) {
 			// TODO Auto-generated catch block
+			System.out.println("FAILED TO CONNECT TO NEIGHBOR NODE");
 			e.printStackTrace();
 		}
 		
 		// BEGIN THE CELL CREATION! DUN-DUN-DUUUUN
-		int openedAgentID = Integer.parseInt(neighbor[2]);// + "").substring(4);
-		//byte[] openCell = createOpenCell(instanceNumber, openedAgentID);
-		//System.out.println("Sending the following open cell: " + openCell.toString());
+		// Get the data of the router from the information returned from the registration server
+		int openedAgentID = Integer.parseInt(neighbor[2]);
+		System.out.println("OPENEDAGENTID " + openedAgentID);
 		
-	}
-	
-	/*
-	 * @param openerAgentID, a HEX-value int that specifies the ID of this agent
-	 * @param openedAgentID, a HEX-value int that specifies the ID of the agent
-	 * 		  that this wants to connect to.
-	 * @returns byte[], a 512-byte cell that can be sent on the network.
-	 * 		  Any extra space at the end of the cell is padded with zeroes.
-	 */
-	private byte[] createOpenCell(String openerAgentID, String openedAgentID) {
-		int openerAgentIDHex = Integer.parseInt(openerAgentID, 16);
-		int openedAgentIDHex = Integer.parseInt(openedAgentID, 16);
-		System.out.println("Creating open cell for openerAgentID, openedAgentID: " + 
-							openerAgentID + ", " + openedAgentID);
-		byte[] message = new byte[512];
-		message[0] = 0;
-		message[1] = 0;
-		message[2] = 0x5;
-		message[3] = (byte) ((openerAgentIDHex & 0xff00) >> 8);
-		message[4] = (byte) (openerAgentIDHex & 0x00ff);
-		message[5] = (byte) ((openedAgentIDHex & 0xff00) >> 8);
-		message[6] = (byte) (openedAgentIDHex & 0x00ff);
-		return message;
+		
+		
 	}
 	
 	
@@ -201,7 +206,7 @@ public class Router {
 			while (true) {
 				try {
 					Socket routerConnection = routerListener.accept();
-					System.out.println("Accepting new connection and building routerConnection.");
+					System.out.println("Accepted new Tor connection; building routerConnection.");
 					RouterConnection connection = new RouterConnection(routerConnection);
 					(new Thread(connection)).start();
 					System.out.println("New RouterConnection created in Router class.");
