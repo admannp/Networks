@@ -122,8 +122,6 @@ public class Router {
 		
 	}
 	
-	
-	
 	// Private class used in the routing table storing the necessary information
 	// for keys in the table
 	private class RoutingTableKey {
