@@ -17,8 +17,6 @@ public class RouterConnection extends Connection {
 	
 	private class RouterConnectionWriteBuffer implements Runnable {
 		
-		
-		
 		public void run() {
 			
 		}

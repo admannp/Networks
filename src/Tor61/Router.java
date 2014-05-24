@@ -13,6 +13,7 @@ import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 import registrationProtocol.ProbeHandler;
 import registrationProtocol.RegistrationHandler;
@@ -20,6 +21,7 @@ import registrationProtocol.RegistrationHandler;
 public class Router {
 	
 	public Map<RoutingTableKey, Connection> routingTable;
+	public RouterConnection circuitBeginning;
 	
 	// Passed in reference to containing node, host name of registration service, and the port
 	// to contact the registration service at.
@@ -53,25 +55,66 @@ public class Router {
 		System.out.println("Creating Tor61 listening/accepting thread on port: " + portNum);
 		
 		// Register this router
-		// TODO: start the probe handler
 		System.out.println("Registering router as router number: " + instanceNumber);
 		RegistrationHandler registrationHandler = new RegistrationHandler(registrationServiceAddress, registrationPortInt);
 		int groupNum = Integer.parseInt(groupNumber);
+		int groupNumHex = Integer.parseInt(groupNumber, 16);
 		int instanceNum = Integer.parseInt(instanceNumber);
+		int instanceNumHex = Integer.parseInt(instanceNumber, 16);
 		// Register this Tor61 router with given group and instance numbers, to be contacted at the given portNum
-		registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + groupNum + instanceNum);
+		registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + (groupNumHex << 16 | instanceNumHex));
 		System.out.println("Router registered");
 		
 		// Print out all registered routers
-		String[][] routers = registrationHandler.fetch("Tor61Router-");
+		String[][] routers = registrationHandler.fetch("Tor61Router-" + groupNum);
+		Random r = new Random();
+		int numNeighbors = routers.length;
+		int neighborToChoose = r.nextInt(numNeighbors);
 		for (String[] router : routers) {
 			System.out.println("Router:");
 			for (String s : router) {
 				System.out.println(s);
 			}
-			
+		}
+		String[] neighbor = routers[neighborToChoose];
+		try {
+			System.out.println("Creating socket to neighbor node");
+			Socket neighborSocket = new Socket(neighbor[0], Integer.parseInt(neighbor[1]));
+			RouterConnection neighborConnection = new RouterConnection(neighborSocket);
+			circuitBeginning = neighborConnection;
+		} catch (NumberFormatException | IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 		
+		// BEGIN THE CELL CREATION! DUN-DUN-DUUUUN
+		int openedAgentID = Integer.parseInt(neighbor[2]);// + "").substring(4);
+		//byte[] openCell = createOpenCell(instanceNumber, openedAgentID);
+		//System.out.println("Sending the following open cell: " + openCell.toString());
+		
+	}
+	
+	/*
+	 * @param openerAgentID, a HEX-value int that specifies the ID of this agent
+	 * @param openedAgentID, a HEX-value int that specifies the ID of the agent
+	 * 		  that this wants to connect to.
+	 * @returns byte[], a 512-byte cell that can be sent on the network.
+	 * 		  Any extra space at the end of the cell is padded with zeroes.
+	 */
+	private byte[] createOpenCell(String openerAgentID, String openedAgentID) {
+		int openerAgentIDHex = Integer.parseInt(openerAgentID, 16);
+		int openedAgentIDHex = Integer.parseInt(openedAgentID, 16);
+		System.out.println("Creating open cell for openerAgentID, openedAgentID: " + 
+							openerAgentID + ", " + openedAgentID);
+		byte[] message = new byte[512];
+		message[0] = 0;
+		message[1] = 0;
+		message[2] = 0x5;
+		message[3] = (byte) ((openerAgentIDHex & 0xff00) >> 8);
+		message[4] = (byte) (openerAgentIDHex & 0x00ff);
+		message[5] = (byte) ((openedAgentIDHex & 0xff00) >> 8);
+		message[6] = (byte) (openedAgentIDHex & 0x00ff);
+		return message;
 	}
 	
 	
@@ -142,7 +185,7 @@ public class Router {
 		torNodeListener() {
 			try {
 				
-				routerListener = new ServerSocket();
+				routerListener = new ServerSocket(0);
 				port = routerListener.getLocalPort();
 				System.out.println("Listening for Tor connections on port: " + port);
 			} catch (IOException e) {
