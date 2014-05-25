@@ -169,6 +169,191 @@ public class CellFormator {
 	 */
 	public static byte[] relayBeginCell(String circuitID, 
 			String streamID, String hostIdentifier, String port) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [11-12] -> body length
+		String body = hostIdentifier + ":" + port + '\0';
+		byte[] bodyLengthBytes = intToByteArray(body.length());
+		for (int i = 2; i < bodyLengthBytes.length; i++) {
+			message[i + 9] = bodyLengthBytes[i];
+		}
+		// message [13] -> type of relay
+		message[13] = (byte) 0x01;
+		// message [14,] -> body
+		byte[] bodyBytes = body.getBytes();
+		for (int i = 0; i < bodyBytes.length; i++) {
+			message [i + 14] = bodyBytes[i];
+		}
+		return message;
+	}
+	
+	/**
+	 * The relayDataCell takes in a circuit ID, stream ID, and some data, 
+	 * returning properly formatted Tor61 cells.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @param data, a string representing the data to send in this cell
+	 * @return byte[][], a variable length array where each index contains a 
+	 * 		   512 byte array that is encoded as a relay data
+	 * 		   cell. Any unnecessary space in a cell is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[][] relayDataCell(String circuitID, 
+			String streamID, String data) {
+		byte[][] cells = new byte[(int) Math.ceil(data.length() / 498.0)][512];
+		int currentCell = 0;
+		while (data.length() > 0) {
+			byte[] message = relayShell(circuitID, streamID);
+			// message [11-12] -> body length
+			String body;
+			if (data.length() > 498) {
+				body = data.substring(0, 498);
+				data = data.substring(498);
+			} else {
+				body = data;
+				data = "";
+			}
+			byte[] bodyLengthBytes = intToByteArray(body.length());
+			for (int i = 2; i < bodyLengthBytes.length; i++) {
+				message[i + 9] = bodyLengthBytes[i];
+			}
+			// message [13] -> type of relay
+			message[13] = (byte) 0x02;
+			// message [14,] -> body
+			byte[] bodyBytes = body.getBytes();
+			for (int i = 0; i < bodyBytes.length; i++) {
+				message [i + 14] = bodyBytes[i];
+			}
+			cells[currentCell++] = message;
+		}
+		return cells;
+	}
+	
+	/**
+	 * The relayEndCell takes in a circuit ID and stream ID 
+	 * and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @return byte[], a 512 byte array that is encoded as a relay end
+	 * 		   cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayEndCell(String circuitID, String streamID) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [13] -> type of relay
+		message[13] = (byte) 0x03;
+		return message;
+	}
+	
+	/**
+	 * The relayConnectedCell takes in a circuit ID and stream ID 
+	 * and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @return byte[], a 512 byte array that is encoded as a relay connected
+	 * 		   cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayConnectedCell(String circuitID, String streamID) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [13] -> type of relay
+		message[13] = (byte) 0x04;
+		return message;
+	}
+	
+	/**
+	 * The relayExtendCell takes in a circuit ID, stream ID, an IP,
+	 * port, and agent id and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @param IP, a string representing the IP of the node to extend to
+	 * @param port, a string representing the port of the node to extend to
+	 * @param agentID, a string representing the agent ID of the node to
+	 * 		  extend to
+	 * @return byte[], a 512 byte array that is encoded as a relay extend
+	 * 		   cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayExtendCell(String circuitID, 
+			String streamID, String IP, String port, String agentID) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [11-12] -> body length
+		String body = IP + ":" + port + '\0' + agentID;
+		byte[] bodyLengthBytes = intToByteArray(body.length());
+		for (int i = 2; i < bodyLengthBytes.length; i++) {
+			message[i + 9] = bodyLengthBytes[i];
+		}
+		// message [13] -> type of relay
+		message[13] = (byte) 0x06;
+		// message [14,] -> body
+		byte[] bodyBytes = body.getBytes();
+		for (int i = 0; i < bodyBytes.length; i++) {
+			message [i + 14] = bodyBytes[i];
+		}
+		return message;
+	}
+	
+	/**
+	 * The relayExtendedCell takes in a circuit ID and stream ID 
+	 * and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @return byte[], a 512 byte array that is encoded as a relay extended
+	 * 		   cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayExtendedCell(String circuitID, String streamID) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [13] -> type of relay
+		message[13] = (byte) 0x07;
+		return message;
+	}
+	
+	/**
+	 * The relayBeginFailedCell takes in a circuit ID and stream ID 
+	 * and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @return byte[], a 512 byte array that is encoded as a relay begin
+	 * 		   failed cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayBeginFailedCell(String circuitID, String streamID) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [13] -> type of relay
+		message[13] = (byte) 0x0b;
+		return message;
+	}
+	
+	/**
+	 * The relayExtendFailedCell takes in a circuit ID and stream ID 
+	 * and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @return byte[], a 512 byte array that is encoded as a relay extend
+	 * 		   failed cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayExtendFailedCell(String circuitID, String streamID) {
+		byte[] message = relayShell(circuitID, streamID);
+		// message [13] -> type of relay
+		message[13] = (byte) 0x0c;
+		return message;
+	}
+	
+	/*
+	 * Helper method that fills in the details that all relay
+	 * cells share. However, it's the responsability of the
+	 * caller to fill in the body length, relay cmd, and body
+	 * fields in the cell.
+	 */
+	private static byte[] relayShell(String circuitID, String streamID) {
 		byte[] message = new byte[512];
 		// message[0-1] -> circuit ID
 		byte[] circuitIDBytes = intToByteArray(Integer.parseInt(circuitID));
@@ -185,19 +370,6 @@ public class CellFormator {
 		// message [5-10] -> all zeroes. We don't use them for tor61.
 		for (int i = 5; i <= 10; i++) {
 			message[i] = (byte) 0x00;
-		}
-		// message [11-12] -> body length
-		String body = hostIdentifier + ":" + port + '\0';
-		byte[] bodyLengthBytes = intToByteArray(body.length());
-		for (int i = 2; i < bodyLengthBytes.length; i++) {
-			message[i + 9] = bodyLengthBytes[i];
-		}
-		// message [13] -> type of relay
-		message[13] = (byte) 0x01;
-		// message [14,] -> body
-		byte[] bodyBytes = body.getBytes();
-		for (int i = 0; i < bodyBytes.length; i++) {
-			message [i + 14] = bodyBytes[i];
 		}
 		return message;
 	}
@@ -225,17 +397,17 @@ public class CellFormator {
 	}
 	
 	/*public static void main(String[] args) {
-		byte[] message = relayBeginCell("321", "654", "testing", "9876");
-		byte[] circID = new byte[] {0, 0, message[0], message[1]};
-		byte[] streamID = new byte[] {0, 0, message[3], message[4]};
-		byte[] bodyLength = new byte[] {0, 0, message[11], message[12]};
+		byte[][] message = relayDataCell("321", "654", "testing all o'er dis place. Mmm.");
+		byte[] circID = new byte[] {0, 0, message[0][0], message[0][1]};
+		byte[] streamID = new byte[] {0, 0, message[0][3], message[0][4]};
+		byte[] bodyLength = new byte[] {0, 0, message[0][11], message[0][12]};
 		
 		int circuitIDnum = byteArrayToInt(circID);
 		int streamIDnum = byteArrayToInt(streamID);
 		int bodyLengthNum = byteArrayToInt(bodyLength);
 		String body = "";
 		for (int i = 0; i < bodyLengthNum; i++) {
-			body += (char) message[i + 14];
+			body += (char) message[0][i + 14];
 		}
 		System.out.println(body);
 	}*/
