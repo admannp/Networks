@@ -168,6 +168,22 @@ public class Router {
 		return routers[neighborToChoose];
 	}
 	
+	/**
+	 * Given the service data number attached to a call on fetch, returns an
+	 * int[] where index 0 is the group number and index 1 is the instance
+	 * number.
+	 * 
+	 * @param s, a string representing the service data number
+	 * @return int[], the group number in index 0 and instance number in
+	 * 		   index 1
+	 */
+	private static int[] convertGroupStringToInts(String s) {
+		String hexGroup = Integer.toHexString(Integer.parseInt(s));
+		String instanceNumber = hexGroup.substring(hexGroup.length() - 4, hexGroup.length());
+		String groupNumber = hexGroup.substring(0, hexGroup.length() - 4);
+		return new int[] {Integer.parseInt(instanceNumber), Integer.parseInt(groupNumber)};
+	}
+	
 	// Private class used in the routing table storing the necessary information
 	// for keys in the table
 	private class RoutingTableKey {
