@@ -9,6 +9,25 @@ package Tor61;
 
 public class CellFormator {
 	
+	public enum CellType {
+		OPEN,
+		OPENED,
+		OPEN_FAILED,
+		CREATE,
+		CREATED,
+		CREATE_FAILED,
+		DESTROY,
+		RELAY_BEGIN,
+		RELAY_DATA,
+		RELAY_END,
+		RELAY_CONNECTED,
+		RELAY_EXTEND,
+		RELAY_EXTENDED,
+		RELAY_BEGIN_FAILED,
+		RELAY_EXTEND_FAILED,
+		UNKNOWN
+	}
+	
 	/**
 	 * The openCell method takes in two strings representing
 	 * the opener and opened agent IDs and properly formats
@@ -396,6 +415,40 @@ public class CellFormator {
 	    };
 	}
 	
+	/**
+	 * Takes in a cell and returns a CellType enum displaying the type
+	 * 
+	 * @param cell, a byte[] 
+	 * @return CellType, an enum describing the type of cell
+	 */
+	public static CellType determineType(byte[] cell) {
+		if (cell.length != 512)
+			return CellType.UNKNOWN;
+		byte cellType = cell[2];
+		switch(cellType) {
+			case 0x05: return CellType.OPEN;
+			case 0x06: return CellType.OPENED;
+			case 0x07: return CellType.OPEN_FAILED;
+			case 0x01: return CellType.CREATE;
+			case 0x02: return CellType.CREATED;
+			case 0x08: return CellType.CREATE_FAILED;
+			case 0x04: return CellType.DESTROY;
+			case 0x03:
+				byte relayType = cell[13];
+				switch(relayType) {
+					case 0x01: return CellType.RELAY_BEGIN;
+					case 0x02: return CellType.RELAY_DATA;
+					case 0x03: return CellType.RELAY_END;
+					case 0x04: return CellType.RELAY_CONNECTED;
+					case 0x06: return CellType.RELAY_EXTEND;
+					case 0x07: return CellType.RELAY_EXTENDED;
+					case 0x0b: return CellType.RELAY_BEGIN_FAILED;
+					case 0x0c: return CellType.RELAY_EXTEND_FAILED;
+				}
+			default: return CellType.UNKNOWN;
+		}
+	}
+	
 	/*public static void main(String[] args) {
 		byte[][] message = relayDataCell("321", "654", "testing all o'er dis place. Mmm.");
 		byte[] circID = new byte[] {0, 0, message[0][0], message[0][1]};
@@ -410,5 +463,6 @@ public class CellFormator {
 			body += (char) message[0][i + 14];
 		}
 		System.out.println(body);
+		CellType type = determineType(new byte[] {0, 0, 0});
 	}*/
 }
