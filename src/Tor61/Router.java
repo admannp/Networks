@@ -112,7 +112,8 @@ public class Router {
 		// Create open cell with agent IDs 
 		
 		// TODO: get the proper other agent ID
-		byte[] openCell = CellFormatter.openCell(thisAgentID, nextNodeInformation[2].substring(4));
+		int[] instanceGroupNumbers = convertGroupStringToInts(nextNodeInformation[2]);
+		byte[] openCell = CellFormatter.openCell(thisAgentID, "" + instanceGroupNumbers[0]);
 		System.out.println("Open cell: " + openCell);
 		System.out.println("Sending open cell");
 		nextNodeConnection.send(openCell);

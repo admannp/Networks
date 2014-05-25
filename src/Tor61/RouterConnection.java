@@ -107,7 +107,7 @@ public class RouterConnection extends Connection {
 						short circuitID = (short) r.nextInt(Short.MAX_VALUE + 1);
 						circuitIDs.add(circuitID);
 						System.out.println("Sending create cell with circuit ID: " + circuitID);
-						response = CellFormatter.createCell("" + 3160);
+						response = CellFormatter.createCell("" + circuitID);
 						send(response);
 						break;
 					case OPEN_FAILED:
@@ -115,8 +115,8 @@ public class RouterConnection extends Connection {
 						System.out.println("Open failed");
 						break;
 					case CREATE:
-						String responseCircuitID = "3160";
-						System.out.println("Received a create cell, responding with created. ID: ");
+						String responseCircuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						System.out.println("Received a create cell, responding with created. ID: " + responseCircuitID);
 						response = CellFormatter.createdCell("" + responseCircuitID);
 						send(response);
 						break;
