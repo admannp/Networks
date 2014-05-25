@@ -7,7 +7,7 @@ package Tor61;
  * methods to format cells for use on the Tor61 network.
  */
 
-public class CellFormator {
+public class CellFormatter {
 	
 	/**
 	 * The openCell method takes in two strings representing
