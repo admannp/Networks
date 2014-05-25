@@ -105,6 +105,27 @@ public class CellFormatter {
 	}
 	
 	/**
+	 * Takes in an open cell and returns the agent IDs associated with it
+	 * 
+	 * @param cell, a byte[] representing a properly formatted open cell
+	 * @return a string[] representing the agent IDs,
+	 * 		   null if it's an illegally formatted cell
+	 * 		   null if it's not an open cell
+	 */
+	public static String[] getIDsFromOpenCell(byte[] cell) {
+		if (cell.length != 512)
+			return null;
+		if (cell[2] != 0x05 && cell[2] != 0x06 && cell[2] != 0x07)
+			return null;
+		byte[] openerAgentID = new byte[] {cell[3], cell[4], cell[5], cell[6]};
+		byte[] openedAgentID = new byte[] {cell[7], cell[8], cell[9], cell[10]};
+		return new String[] {
+				"" + byteArrayToInt(openerAgentID), 
+				"" + byteArrayToInt(openedAgentID)
+				};
+	}
+	
+	/**
 	 * The createCell method takes a string, the circuit ID,
 	 * and returns a properly formatted Tor61 cell.
 	 * 
@@ -449,8 +470,8 @@ public class CellFormatter {
 		}
 	}
 	
-	/*public static void main(String[] args) {
-		byte[][] message = relayDataCell("321", "654", "testing all o'er dis place. Mmm.");
+	public static void main(String[] args) {
+		/*byte[][] message = relayDataCell("321", "654", "testing all o'er dis place. Mmm.");
 		byte[] circID = new byte[] {0, 0, message[0][0], message[0][1]};
 		byte[] streamID = new byte[] {0, 0, message[0][3], message[0][4]};
 		byte[] bodyLength = new byte[] {0, 0, message[0][11], message[0][12]};
@@ -463,6 +484,8 @@ public class CellFormatter {
 			body += (char) message[0][i + 14];
 		}
 		System.out.println(body);
-		CellType type = determineType(new byte[] {0, 0, 0});
-	}*/
+		CellType type = determineType(new byte[] {0, 0, 0});*/
+		byte[] message = openedCell("321", "789");
+		String[] agents = getIDsFromOpenCell(message);
+	}
 }
