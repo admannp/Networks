@@ -1,6 +1,8 @@
 package Tor61;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -57,15 +59,73 @@ public class RouterConnection extends Connection {
 	public void run() {	
 		try {
 			System.out.println("Waiting for incoming cells.");
-			BufferedReader inFromClient = new BufferedReader(
-					new InputStreamReader(connection.getInputStream()));
-			String inputString;
+			
+			// Prepare to accept input stream from server
+			DataInputStream input = new DataInputStream(connection.getInputStream());
+			ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
+			
 			while (true) {
-				char[] incomingMessage = new char[512];
-				inFromClient.read(incomingMessage);
+				
+				// Accept bytes from server, writing into given buffer 
+				byte buffer[] = new byte[512];
+				int bytesRead;
+				int totalBytesRead = 0;
+				while ((bytesRead = input.read(buffer)) != -1) {
+					totalBytesRead += bytesRead;
+					System.out.println("Beginning one iteration; bytesRead = " + bytesRead);
+					serverResponse.write(buffer, 0, bytesRead);
+					System.out.println("Finished one iteration");
+					if (totalBytesRead == 512) {
+						break;
+					}
+				}
+				//System.out.println("Done with that");
+				byte[] incomingMessage = serverResponse.toByteArray();
+					
+				//System.out.println(Arrays.toString(incomingMessage));
+				CellFormatter.CellType type = CellFormatter.determineType(incomingMessage);
+				System.out.println(type);
+				switch(type) {
+					case OPEN:
+						byte[] response = CellFormatter.openedCell("5", "5");
+						writeBytes(response);
+						break;
+					case OPENED:
+						
+						break;
+					case OPEN_FAILED:
+						break;
+					case CREATE:
+						break;
+					case CREATED:
+						break;
+					case CREATE_FAILED:
+						break;
+					case DESTROY:
+						break;
+					case RELAY_BEGIN:
+						break;
+					case RELAY_DATA:
+						break;
+					case RELAY_END:
+						break;
+					case RELAY_CONNECTED:
+						break;
+					case RELAY_EXTEND:
+						break;
+					case RELAY_EXTENDED:
+						break;
+					case RELAY_BEGIN_FAILED:
+						break;
+					case RELAY_EXTEND_FAILED:
+						break;
+					case UNKNOWN:
+						System.out.println("HOLY SHIT, ERROR!");
+						break;
+				}
 				System.out.println("Received incoming cell to router connection at " + 
 									connection.getLocalAddress() + ", " + connection.getLocalPort());
-				System.out.println(Arrays.toString(incomingMessage));
+				
 			}
 		} catch (IOException e) {
 			System.out.println("Unable to read information incoming to router connection at: " + 
@@ -114,7 +174,7 @@ public class RouterConnection extends Connection {
 					System.out.println("Now sending data.");
 					try {
 						byte[] cell = buffer.remove();
-						System.out.println("Data to be sent: " + Arrays.toString(cell));
+						//System.out.println("Data to be sent: " + Arrays.toString(cell));
 						out.write(cell);
 					} catch (IOException e) {
 						System.out.println("Unable to write to output stream for router connection at: " +

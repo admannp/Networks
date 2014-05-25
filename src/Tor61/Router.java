@@ -109,7 +109,7 @@ public class Router {
 	 * hop router
 	 */
 	private void openConnection(String[] nextNodeInformation, RouterConnection nextNodeConnection) {
-		byte[] openCell = CellFormatter.openCell("0", "0");
+		byte[] openCell = CellFormatter.openCell("255", "255");
 		System.out.println("Open cell: " + openCell);
 		System.out.println("Sending open cell");
 		nextNodeConnection.writeBytes(openCell);
