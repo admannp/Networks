@@ -1,26 +1,128 @@
 package Tor61;
 
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.Socket;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.Queue;
+
+/*
+ * Colin Miller, Nick Adman
+ * 
+ * Router connection class that encapsulates sending and receiving data from a router portion
+ * of a given node to another node on some circuit
+ * 
+ * Should be connected to just one other node; each connection from this router to another will
+ * be handled by a unique RouterConnection
+ * 
+ */
 
 public class RouterConnection extends Connection {
 	
+	// The connection to the other node
 	Socket connection;
+	// Buffer to write to - handled by separate thread
+	RouterConnectionWriteBuffer writeBuffer;
 	
+	/**
+	 * Creates a new RouterConnection associated with the given socket. The RouterConnection
+	 * has two threads: one handles reading and the other writing on the given socket.
+	 * 
+	 * @param connection, The socket connected to the foreign router
+	 */
 	public RouterConnection(Socket connection) {
+		System.out.println("ROUTER CONNECTION CREATED. ADDRESS, PORT: "+ connection.getLocalAddress() + ", " + connection.getLocalPort());
 		this.connection = connection;
-	}
-	
-	@Override
-	public void run() {
-		// TODO: Put stuff here
-	}
-	
-	private class RouterConnectionWriteBuffer implements Runnable {
+		writeBuffer = new RouterConnectionWriteBuffer();
+		(new Thread(writeBuffer)).start();
 		
-		public void run() {
-			
+	}
+	
+	/**
+	 * Sends the given byte array along the circuit associated with this RouterConnection
+	 * @param cell, the byte array to be sent
+	 */
+	public void writeBytes(byte[] cell) {
+		writeBuffer.put(cell);
+	}
+	
+	
+	/**
+	 * Handles listening for data from the foreign router
+	 */
+	@Override
+	public void run() {	
+		try {
+			System.out.println("Waiting for incoming cells.");
+			BufferedReader inFromClient = new BufferedReader(
+					new InputStreamReader(connection.getInputStream()));
+			String inputString;
+			while (true) {
+				char[] incomingMessage = new char[512];
+				inFromClient.read(incomingMessage);
+				System.out.println("Received incoming cell to router connection at " + 
+									connection.getLocalAddress() + ", " + connection.getLocalPort());
+				System.out.println(Arrays.toString(incomingMessage));
+			}
+		} catch (IOException e) {
+			System.out.println("Unable to read information incoming to router connection at: " + 
+								connection.getLocalAddress() + ", " + connection.getLocalPort());
+			e.printStackTrace();
+		}
+	}
+	
+	// Private inner class used to write information to the next step of the 
+	// circuit this router connection is attached to
+	private class RouterConnectionWriteBuffer implements Runnable {
+		Queue<byte[]> buffer;
+		DataOutputStream out;
+		
+		/**
+		 * Create a new RouterConnectionWriteBuffer to handle the writing of information
+		 * along this circuit
+		 */
+		public RouterConnectionWriteBuffer() {
+			// Using linked list for the queue
+			buffer = new LinkedList<byte[]>();
+			try {
+				out = new DataOutputStream(connection.getOutputStream());
+			} catch (IOException e) {
+				System.out.println("Unable to create output stream for router connection at: " +
+									connection.getLocalAddress() + ", " + connection.getLocalPort());
+				e.getMessage();
+			}
 		}
 		
+		/**
+		 * Put the given byte array into the write buffer (byte array is expected to be in some
+		 * cell format)
+		 * @param cell
+		 */
+		public void put(byte[] cell) {
+			buffer.add(cell);
+		}
+		
+		// Loop forever. When information is in the buffer, send it along the connection
+		public void run() {
+			while (true) {
+				if(!buffer.isEmpty()) {
+					System.out.println("Received data in write buffer for router connection at " + 
+										connection.getLocalAddress() + ", " + connection.getLocalPort());
+					System.out.println("Now sending data.");
+					try {
+						byte[] cell = buffer.remove();
+						System.out.println("Data to be sent: " + Arrays.toString(cell));
+						out.write(cell);
+					} catch (IOException e) {
+						System.out.println("Unable to write to output stream for router connection at: " +
+								connection.getLocalAddress() + ", " + connection.getLocalPort());
+						e.printStackTrace();
+					}
+				}
+			}
+		}	
 	}
-
 }

@@ -1,7 +1,6 @@
 package Tor61;
 
 import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -16,13 +15,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 
-import registrationProtocol.ProbeHandler;
 import registrationProtocol.RegistrationHandler;
 
 public class Router {
 	
+	private static final int NUM_HOPS = 3;
+	
 	public Map<RoutingTableKey, Connection> routingTable;
 	public RouterConnection thisCircuit;
+	public Map<String, RouterConnection> connections;
+	public int numHops;
 	
 	// Passed in reference to containing node, host name of registration service, and the port
 	// to contact the registration service at.
@@ -44,6 +46,14 @@ public class Router {
 			// Repeat if failed
 			// Relay extend
 		
+		// There are no hops on this circuit before its creation
+		numHops = 0;
+		System.out.println("Circuit currently contains " + numHops + " hops.");
+		
+		// Initialize set of connections
+		System.out.println("Creating connections Map");
+		connections = new HashMap<String, RouterConnection>();
+		
 		// Initialize routing table
 		// Use a synchronized map for safe access from multiple threads
 		System.out.println("Initializing the routing table.");
@@ -55,7 +65,71 @@ public class Router {
 		int portNum = acceptPort.port;
 		System.out.println("Creating Tor61 listening/accepting thread on port: " + portNum);
 		
-		// Register this router
+		// Register this router, get the RegistrationHandler object to use to query the registration service
+		RegistrationHandler registrationHandler = register(registrationServiceAddress, registrationPortInt, groupNumber, instanceNumber, portNum);
+		
+		// Get all registered routers, and return one at random
+		String[] nextCircuitNode = getRegisteredRouter(registrationHandler, groupNumber);
+		
+		
+		/************************** START CIRCUIT CREATION *****************************/
+		
+		// In this case only, "thisCircuit" should be set to the successfully connected node
+		System.out.println("Creating first circuit hop to random neighbor node");
+		try {
+			System.out.println("Creating TCP connection.");
+			Socket nextCircuitNodeSocket = new Socket(nextCircuitNode[0], Integer.parseInt(nextCircuitNode[1]));
+			// Set "this circuit" to newly created RouterConnection
+			thisCircuit = new RouterConnection(nextCircuitNodeSocket);
+			(new Thread(thisCircuit)).start();
+		} catch (NumberFormatException | IOException e) {
+			// TODO Auto-generated catch block
+			System.out.println("FAILED TO CONNECT TO NEIGHBOR NODE");
+			e.printStackTrace();
+		}
+		
+		// Send the open cell, with timeout
+		System.out.println("Sending open cell.");
+		openConnection(nextCircuitNode, thisCircuit);
+		
+		// Success?
+		
+		
+		// TODO: figure out how to add connections to the connections map when
+		// they're incoming from another router
+	}
+	
+	// TODO: don't forget timeout
+	/**
+	 * Send an open cell to the given next node, using information provided by the next 
+	 * node information. On success adds the connection to the map of existing connections.
+	 * @param nextNodeInformation, string array that stores information about the cell to 
+	 * which we want to open a connection
+	 * @param nextNodeConnection, RouterConnection already with a TCP connection to the next
+	 * hop router
+	 */
+	private void openConnection(String[] nextNodeInformation, RouterConnection nextNodeConnection) {
+		byte[] openCell = CellFormatter.openCell("0", "0");
+		System.out.println("Open cell: " + openCell);
+		System.out.println("Sending open cell");
+		nextNodeConnection.writeBytes(openCell);
+		
+		// Add this connection to the connections map
+		connections.put(nextNodeInformation[2], nextNodeConnection);
+	}
+	
+	/**
+	 * Registers the node with given group and instance numbers associated with a give listening port 
+	 * with the registration service at the given address and port.
+	 *
+	 * @param registrationServiceAddress, address of the registration service
+	 * @param registrationPortInt, port of the registration service
+	 * @param groupNumber, group number for this node
+	 * @param instanceNumber, instance number of this node
+	 * @param portNum, port this node listens for new connections on
+	 * @return the registration handler object that handles registration related queries
+	 */
+	private RegistrationHandler register(String registrationServiceAddress, int registrationPortInt, String groupNumber, String instanceNumber, int portNum) {
 		System.out.println("Registering router as router number: " + instanceNumber);
 		RegistrationHandler registrationHandler = new RegistrationHandler(registrationServiceAddress, registrationPortInt);
 		int groupNum = Integer.parseInt(groupNumber);
@@ -65,61 +139,30 @@ public class Router {
 		// Register this Tor61 router with given group and instance numbers, to be contacted at the given portNum
 		registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + (groupNumHex << 16 | instanceNumHex));
 		System.out.println("Router registered");
-		
-		// Print out all registered routers
-		String[][] routers = registrationHandler.fetch("Tor61Router-" + groupNum);
+		return registrationHandler;
+	}
+	
+	/**
+	 * Choose a random router from the list of registered routers with the given prefix
+	 * @param registrationHandler, the registration handler communicating with the registration service
+	 * given to the node's constructor
+	 * @param prefix, String prefix to use when fetching list of available routers
+	 * @return the string array containing information about the randomly chosen router
+	 */
+	private String[] getRegisteredRouter(RegistrationHandler registrationHandler, String prefix) {
+		String[][] routers = registrationHandler.fetch("Tor61Router-" + Integer.parseInt(prefix));
 		Random r = new Random();
 		int numNeighbors = routers.length;
 		int neighborToChoose = r.nextInt(numNeighbors);
+		// For debugging, print connected routers
 		for (String[] router : routers) {
 			System.out.println("Router:");
 			for (String s : router) {
 				System.out.println(s);
 			}
 		}
-		
-		// Get the randomly chosen neighbor Tor node
-		String[] neighbor = routers[neighborToChoose];
-		try {
-			System.out.println("Creating socket to random neighbor node");
-			Socket neighborSocket = new Socket(neighbor[0], Integer.parseInt(neighbor[1]));
-			thisCircuit = new RouterConnection(neighborSocket);
-			
-			// Testing that the connection works
-			BufferedReader inFromUser = new BufferedReader(new InputStreamReader(
-					System.in));
-			DataOutputStream outToServer = new DataOutputStream(
-					neighborSocket.getOutputStream());
-			BufferedReader inFromServer = new BufferedReader(new InputStreamReader(
-					neighborSocket.getInputStream()));
-			String sentence;
-			String modifiedSentence;
-			while(true) {
-				sentence = inFromUser.readLine();
-				if (sentence.equals("close")) {
-					neighborSocket.close();
-					System.exit(0);
-				}
-				System.out.println("Now writing");
-				outToServer.writeBytes(sentence + '\n');
-				System.out.println("Now reading");
-				modifiedSentence = inFromServer.readLine();
-				System.out.println("FROM SERVER: " + modifiedSentence);
-			}
-			
-		} catch (NumberFormatException | IOException e) {
-			// TODO Auto-generated catch block
-			System.out.println("FAILED TO CONNECT TO NEIGHBOR NODE");
-			e.printStackTrace();
-		}
-		
-		// BEGIN THE CELL CREATION! DUN-DUN-DUUUUN
-		// Get the data of the router from the information returned from the registration server
-		int openedAgentID = Integer.parseInt(neighbor[2]);
-		System.out.println("OPENEDAGENTID " + openedAgentID);
-		
-		
-		
+		// Return a randomly chosen neighbor Tor node
+		return routers[neighborToChoose];
 	}
 	
 	// Private class used in the routing table storing the necessary information
@@ -204,7 +247,7 @@ public class Router {
 			while (true) {
 				try {
 					Socket routerConnection = routerListener.accept();
-					System.out.println("Accepted new Tor connection; building routerConnection.");
+					System.out.println("Accepted new Tor connection; building routerConnection. Local port: " + routerConnection.getLocalPort());
 					RouterConnection connection = new RouterConnection(routerConnection);
 					(new Thread(connection)).start();
 					System.out.println("New RouterConnection created in Router class.");
@@ -218,9 +261,12 @@ public class Router {
 		
 	}
 	
-	// Get the useful address of the protocol
-	// Includes a check to make sure this is not a LAN specific address
-	private static String getAddress() {
+	/**
+	 * Get the address of the local machine this code is running on. Robust in that it
+	 * avoids returning LAN-specific IP addresses
+	 * @return the address of the local machine
+	 */
+	private String getAddress() {
 		String localAddress = "";
 		try {
 			localAddress = Inet4Address.getLocalHost().getHostAddress();
