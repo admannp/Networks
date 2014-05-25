@@ -372,7 +372,21 @@ public class CellFormatter {
 		return message;
 	}
 	
+	/**
+	 * The getRelayExtendInformation method takes in a relay extend
+	 * cell and returns the IP, port, and agentID in a String[]
+	 * 
+	 * @param cell, a byte[] representing a valid relay extend cell
+	 * @return String[], where index 0 is the IP, index 1 is the port,
+	 * 		   and index 2 is the agent ID.
+	 * 		   null if the cell is not properly formatted
+	 * 		   null if the cell is not a relay extend cell
+	 */
 	public static String[] getRelayExtendInformation(byte[] cell) {
+		if (cell.length != 512)
+			return null;
+		if (cell[2] != 0x03 || cell[13] != 0x06)
+			return null;
 		byte[] bodyLengthBytes = new byte[] {0, 0, cell[11], cell[12]};
 		int bodyLength = byteArrayToInt(bodyLengthBytes);
 		String body = "";
