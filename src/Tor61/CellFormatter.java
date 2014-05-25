@@ -372,6 +372,17 @@ public class CellFormatter {
 		return message;
 	}
 	
+	public static String[] getRelayExtendInformation(byte[] cell) {
+		byte[] bodyLengthBytes = new byte[] {0, 0, cell[11], cell[12]};
+		int bodyLength = byteArrayToInt(bodyLengthBytes);
+		String body = "";
+		for (int i = 0; i < bodyLength; i++) {
+			body += (char) cell[i + 14];
+		}
+		String[] parts = body.split("[:\0]");
+		return parts;
+	}
+	
 	/**
 	 * The relayExtendedCell takes in a circuit ID and stream ID 
 	 * and returns a properly formatted Tor61 cell.
@@ -524,5 +535,7 @@ public class CellFormatter {
 		//byte[] message = relayExtendedCell("321", "789");
 		//String agents = getCircuitIDFromCell(message);
 		//int[] nums = convertGroupStringToInts("805580800");
+		byte[] relayBegin = relayExtendCell("321", "987", "localhost", "5656", "0060");
+		String[] parts = getRelayExtendInformation(relayBegin);
 	}
 }
