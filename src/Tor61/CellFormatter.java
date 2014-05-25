@@ -196,6 +196,42 @@ public class CellFormatter {
 	}
 	
 	/**
+	 * Takes in an properly formatted non-open cell and returns the circuit
+	 * ID associated with it
+	 * 
+	 * @param cell, a byte[] representing a properly formatted non-open cell
+	 * @return a string representing the cell's circuit ID
+	 * 		   null if it's an illegally formatted cell
+	 * 		   null if it's an open cell
+	 */
+	public static String getCircuitIDFromCell(byte[] cell) {
+		if (cell.length != 512)
+			return null;
+		if (cell[2] == 0x05 || cell[2] == 0x06 || cell[2] == 0x07)
+			return null;
+		byte[] circuitID = new byte[] {0, 0, cell[0], cell[1]};
+		return ""+ byteArrayToInt(circuitID);
+	}
+	
+	/**
+	 * Takes in an properly formatted relay cell and returns the stream
+	 * ID associated with it
+	 * 
+	 * @param cell, a byte[] representing a properly formatted relay cell
+	 * @return a string representing the cell's stream ID
+	 * 		   null if it's an illegally formatted cell
+	 * 		   null if it's not a relay cell
+	 */
+	public static String getStreamIDFromCell(byte[] cell) {
+		if (cell.length != 512)
+			return null;
+		if (cell[2] != 0x03)
+			return null;
+		byte[] circuitID = new byte[] {0, 0, cell[3], cell[4]};
+		return ""+ byteArrayToInt(circuitID);
+	}
+	
+	/**
 	 * The relayBeginCell takes in a circuit ID, stream ID, a host identifier,
 	 * and a port and returns a properly formatted Tor61 cell.
 	 * 
@@ -485,7 +521,8 @@ public class CellFormatter {
 		}
 		System.out.println(body);
 		CellType type = determineType(new byte[] {0, 0, 0});*/
-		byte[] message = openedCell("321", "789");
-		String[] agents = getIDsFromOpenCell(message);
+		//byte[] message = relayExtendedCell("321", "789");
+		//String agents = getCircuitIDFromCell(message);
+		//int[] nums = convertGroupStringToInts("805580800");
 	}
 }
