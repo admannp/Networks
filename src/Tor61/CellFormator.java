@@ -5,8 +5,6 @@ package Tor61;
  * 
  * The CellFormator is a helper class that provides static
  * methods to format cells for use on the Tor61 network.
- * 
- * TODO: CHANGE THE REPRESENTATION OF INTEGERS TO UNSIGNED 32-BIT NUMBERS!!!!!!!!!!!!!!!!
  */
 
 public class CellFormator {
@@ -74,15 +72,16 @@ public class CellFormator {
 	 */
 	private static byte[] openHelper(String openerAgentID, String openedAgentID, byte type) {
 		byte[] message = new byte[512];
+		byte[] openerAgentBytes = intToByteArray(Integer.parseInt(openerAgentID));
+		byte[] openedAgentBytes = intToByteArray(Integer.parseInt(openedAgentID));
 		message[0] = 0;
 		message[1] = 0;
-		openerAgentID = String.format("%04d", Integer.parseInt(openerAgentID));
-		openedAgentID = String.format("%04d", Integer.parseInt(openedAgentID));
-		String builder = "000" + openerAgentID + openedAgentID;
-		for (int i = 0; i < builder.length(); i++) {
-			message[i] = (byte) Integer.parseInt(builder.substring(i, i + 1));
-		}
 		message[2] = type;
+		// Puts the bytes from the i2b arrays into the message cell
+		for (int i = 0; i < openerAgentBytes.length; i++) {
+			message[i + openerAgentBytes.length - 1] = openerAgentBytes[i];
+			message[i + openerAgentBytes.length + openedAgentBytes.length - 1] = openedAgentBytes[i];
+		}
 		return message;
 	}
 	
@@ -134,9 +133,9 @@ public class CellFormator {
 	 */
 	private static byte[] createHelper(String circuitID, byte type) {
 		byte[] message = new byte[512];
-		circuitID = String.format("%02d", Integer.parseInt(circuitID));
-		for (int i = 0; i < circuitID.length(); i++) {
-			message[i] = (byte) Integer.parseInt(circuitID.substring(i, i + 1));
+		byte[] circuitIDBytes = intToByteArray(Integer.parseInt(circuitID));
+		for (int i = 2; i < circuitIDBytes.length; i++) {
+			message[i - 2] = circuitIDBytes[i];
 		}
 		message[2] = type;
 		return message;
@@ -156,7 +155,88 @@ public class CellFormator {
 		return createHelper(circuitID, (byte) 0x04);
 	}
 	
-	public static void main(String[] args) {
-		byte[] message = openCell("211", "98765");
+	/**
+	 * The relayBeginCell takes in a circuit ID, stream ID, a host identifier,
+	 * and a port and returns a properly formatted Tor61 cell.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @param hostIdentifier, a string representing the host identifier
+	 * @param port, a string representing the port
+	 * @return byte[], a 512 byte array that is encoded as a relay begin
+	 * 		   cell. Any unnecessary space in the array is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[] relayBeginCell(String circuitID, 
+			String streamID, String hostIdentifier, String port) {
+		byte[] message = new byte[512];
+		// message[0-1] -> circuit ID
+		byte[] circuitIDBytes = intToByteArray(Integer.parseInt(circuitID));
+		for (int i = 2; i < circuitIDBytes.length; i++) {
+			message[i - 2] = circuitIDBytes[i];
+		}
+		// magic relay number
+		message[2] = (byte) 0x03;
+		// message[3-4] -> stream id
+		byte[] streamIDBytes = intToByteArray(Integer.parseInt(streamID));
+		for (int i = 2; i < streamIDBytes.length; i++) {
+			message[i + 1] = streamIDBytes[i];
+		}
+		// message [5-10] -> all zeroes. We don't use them for tor61.
+		for (int i = 5; i <= 10; i++) {
+			message[i] = (byte) 0x00;
+		}
+		// message [11-12] -> body length
+		String body = hostIdentifier + ":" + port + '\0';
+		byte[] bodyLengthBytes = intToByteArray(body.length());
+		for (int i = 2; i < bodyLengthBytes.length; i++) {
+			message[i + 9] = bodyLengthBytes[i];
+		}
+		// message [13] -> type of relay
+		message[13] = (byte) 0x01;
+		// message [14,] -> body
+		byte[] bodyBytes = body.getBytes();
+		for (int i = 0; i < bodyBytes.length; i++) {
+			message [i + 14] = bodyBytes[i];
+		}
+		return message;
 	}
+	
+	/*
+	 * Helper method to convert a byte array to an integer
+	 */
+	private static int byteArrayToInt(byte[] bytes) {
+	    return   bytes[3] & 0xFF |
+	            (bytes[2] & 0xFF) << 8 |
+	            (bytes[1] & 0xFF) << 16 |
+	            (bytes[0] & 0xFF) << 24;
+	}
+	
+	/*
+	 * Helper method to convert an int to a byte array
+	 */
+	private static byte[] intToByteArray(int num) {
+	    return new byte[] {
+	        (byte) ((num >> 24) & 0xFF),
+	        (byte) ((num >> 16) & 0xFF),   
+	        (byte) ((num >> 8) & 0xFF),   
+	        (byte) (num & 0xFF)
+	    };
+	}
+	
+	/*public static void main(String[] args) {
+		byte[] message = relayBeginCell("321", "654", "testing", "9876");
+		byte[] circID = new byte[] {0, 0, message[0], message[1]};
+		byte[] streamID = new byte[] {0, 0, message[3], message[4]};
+		byte[] bodyLength = new byte[] {0, 0, message[11], message[12]};
+		
+		int circuitIDnum = byteArrayToInt(circID);
+		int streamIDnum = byteArrayToInt(streamID);
+		int bodyLengthNum = byteArrayToInt(bodyLength);
+		String body = "";
+		for (int i = 0; i < bodyLengthNum; i++) {
+			body += (char) message[i + 14];
+		}
+		System.out.println(body);
+	}*/
 }
