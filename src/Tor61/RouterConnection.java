@@ -8,8 +8,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Random;
+import java.util.Set;
 
 /*
  * Colin Miller, Nick Adman
@@ -29,6 +32,8 @@ public class RouterConnection extends Connection {
 	// Buffer to write to - handled by separate thread
 	RouterConnectionWriteBuffer writeBuffer;
 	
+	Set<Short> circuitIDs;
+	
 	/**
 	 * Creates a new RouterConnection associated with the given socket. The RouterConnection
 	 * has two threads: one handles reading and the other writing on the given socket.
@@ -38,6 +43,7 @@ public class RouterConnection extends Connection {
 	public RouterConnection(Socket connection) {
 		System.out.println("ROUTER CONNECTION CREATED. ADDRESS, PORT: "+ connection.getLocalAddress() + ", " + connection.getLocalPort());
 		this.connection = connection;
+		circuitIDs = new HashSet<Short>();
 		writeBuffer = new RouterConnectionWriteBuffer();
 		(new Thread(writeBuffer)).start();
 		
@@ -47,7 +53,7 @@ public class RouterConnection extends Connection {
 	 * Sends the given byte array along the circuit associated with this RouterConnection
 	 * @param cell, the byte array to be sent
 	 */
-	public void writeBytes(byte[] cell) {
+	public void send(byte[] cell) {
 		writeBuffer.put(cell);
 	}
 	
@@ -62,10 +68,12 @@ public class RouterConnection extends Connection {
 			
 			// Prepare to accept input stream from server
 			DataInputStream input = new DataInputStream(connection.getInputStream());
-			ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
+			
 			
 			while (true) {
 				
+				// Create a new output stream for each incoming message
+				ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
 				// Accept bytes from server, writing into given buffer 
 				byte buffer[] = new byte[512];
 				int bytesRead;
@@ -85,17 +93,32 @@ public class RouterConnection extends Connection {
 				//System.out.println(Arrays.toString(incomingMessage));
 				CellFormatter.CellType type = CellFormatter.determineType(incomingMessage);
 				System.out.println(type);
+				byte[] response;
 				switch(type) {
 					case OPEN:
-						byte[] response = CellFormatter.openedCell("5", "5");
-						writeBytes(response);
+						// TODO: figure out how to do timeouts
+						String[] IDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
+						response = CellFormatter.openedCell(IDs[0], IDs[1]);
+						System.out.println("Received open cell with IDs: " + IDs[0] + " " + IDs[1]);
+						send(response);
 						break;
 					case OPENED:
-						
+						Random r = new Random();
+						short circuitID = (short) r.nextInt(Short.MAX_VALUE + 1);
+						circuitIDs.add(circuitID);
+						System.out.println("Sending create cell with circuit ID: " + circuitID);
+						response = CellFormatter.createCell("" + 3160);
+						send(response);
 						break;
 					case OPEN_FAILED:
+						// TODO: Error handling
+						System.out.println("Open failed");
 						break;
 					case CREATE:
+						String responseCircuitID = "3160";
+						System.out.println("Received a create cell, responding with created. ID: ");
+						response = CellFormatter.createdCell("" + responseCircuitID);
+						send(response);
 						break;
 					case CREATED:
 						break;
@@ -120,6 +143,7 @@ public class RouterConnection extends Connection {
 					case RELAY_EXTEND_FAILED:
 						break;
 					case UNKNOWN:
+						// TODO: don't lose points for this
 						System.out.println("HOLY SHIT, ERROR!");
 						break;
 				}

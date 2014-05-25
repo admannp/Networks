@@ -68,7 +68,7 @@ public class Router {
 		// Register this router, get the RegistrationHandler object to use to query the registration service
 		RegistrationHandler registrationHandler = register(registrationServiceAddress, registrationPortInt, groupNumber, instanceNumber, portNum);
 		
-		// Get all registered routers, and return one at random
+		// Get all registered routers, and return information about a random one
 		String[] nextCircuitNode = getRegisteredRouter(registrationHandler, groupNumber);
 		
 		
@@ -90,7 +90,7 @@ public class Router {
 		
 		// Send the open cell, with timeout
 		System.out.println("Sending open cell.");
-		openConnection(nextCircuitNode, thisCircuit);
+		openConnection(instanceNumber, nextCircuitNode, thisCircuit);
 		
 		// Success?
 		
@@ -108,11 +108,14 @@ public class Router {
 	 * @param nextNodeConnection, RouterConnection already with a TCP connection to the next
 	 * hop router
 	 */
-	private void openConnection(String[] nextNodeInformation, RouterConnection nextNodeConnection) {
-		byte[] openCell = CellFormatter.openCell("255", "255");
+	private void openConnection(String thisAgentID, String[] nextNodeInformation, RouterConnection nextNodeConnection) {
+		// Create open cell with agent IDs 
+		
+		// TODO: get the proper other agent ID
+		byte[] openCell = CellFormatter.openCell(thisAgentID, nextNodeInformation[2].substring(4));
 		System.out.println("Open cell: " + openCell);
 		System.out.println("Sending open cell");
-		nextNodeConnection.writeBytes(openCell);
+		nextNodeConnection.send(openCell);
 		
 		// Add this connection to the connections map
 		connections.put(nextNodeInformation[2], nextNodeConnection);
