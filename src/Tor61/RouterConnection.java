@@ -73,7 +73,7 @@ public class RouterConnection extends Connection {
 			while (true) {
 				
 				// Create a new output stream for each incoming message
-				ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
+				ByteArrayOutputStream incomingMessageStream = new ByteArrayOutputStream();
 				// Accept bytes from server, writing into given buffer 
 				byte buffer[] = new byte[512];
 				int bytesRead;
@@ -81,14 +81,14 @@ public class RouterConnection extends Connection {
 				while ((bytesRead = input.read(buffer)) != -1) {
 					totalBytesRead += bytesRead;
 					System.out.println("Beginning one iteration; bytesRead = " + bytesRead);
-					serverResponse.write(buffer, 0, bytesRead);
+					incomingMessageStream.write(buffer, 0, bytesRead);
 					System.out.println("Finished one iteration");
 					if (totalBytesRead == 512) {
 						break;
 					}
 				}
 				//System.out.println("Done with that");
-				byte[] incomingMessage = serverResponse.toByteArray();
+				byte[] incomingMessage = incomingMessageStream.toByteArray();
 					
 				//System.out.println(Arrays.toString(incomingMessage));
 				CellFormatter.CellType type = CellFormatter.determineType(incomingMessage);
@@ -121,6 +121,7 @@ public class RouterConnection extends Connection {
 						send(response);
 						break;
 					case CREATED:
+						System.out.println("Created circuit, now extending.");
 						break;
 					case CREATE_FAILED:
 						break;

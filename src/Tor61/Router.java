@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.Scanner;
 
 import registrationProtocol.RegistrationHandler;
 
@@ -65,8 +66,30 @@ public class Router {
 		int portNum = acceptPort.port;
 		System.out.println("Creating Tor61 listening/accepting thread on port: " + portNum);
 		
-		// Register this router, get the RegistrationHandler object to use to query the registration service
-		RegistrationHandler registrationHandler = register(registrationServiceAddress, registrationPortInt, groupNumber, instanceNumber, portNum);
+		RegistrationHandler registrationHandler;
+		while (true) {	
+			// Register this router, get the RegistrationHandler object to use to query the registration service
+			String response = "";
+			registrationHandler = register(registrationServiceAddress, registrationPortInt, groupNumber, instanceNumber, portNum);
+			if (registrationHandler == null) {
+				System.out.println("REGISTRATION INFORMATION");
+				System.out.println("Registration service address: 	" + registrationServiceAddress);
+				System.out.println("Registration service port: 		" + registrationPortInt);
+				System.out.println("Group number:					" + groupNumber);
+				System.out.println("Instance number: 				" + instanceNumber);
+				System.out.println("This port number: 				" + portNum);
+				System.out.print("Would you like to try again? (y/n): ");
+				response = new Scanner(System.in).next();
+				if (response.equals("y")) {
+					continue;
+				}
+			}
+			System.out.println("Registration process complete.");
+			if (response.equals("n")) {
+				System.exit(1);
+			}
+			break;
+		}
 		
 		// Get all registered routers, and return information about a random one
 		String[] nextCircuitNode = getRegisteredRouter(registrationHandler, groupNumber);
@@ -141,8 +164,12 @@ public class Router {
 		int instanceNum = Integer.parseInt(instanceNumber);
 		int instanceNumHex = Integer.parseInt(instanceNumber, 16);
 		// Register this Tor61 router with given group and instance numbers, to be contacted at the given portNum
-		registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + (groupNumHex << 16 | instanceNumHex));
-		System.out.println("Router registered");
+		int ret = registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + (groupNumHex << 16 | instanceNumHex));
+		if (ret == -1) {
+			System.out.println("Node registration failed.");
+			return null;
+		}
+		System.out.println("Node registered");
 		return registrationHandler;
 	}
 	

@@ -14,6 +14,6 @@ public class Node {
 	}
 	
 	public static void main(String[] args) {
-		new Node("cse461.cs.washington.edu", "46101", "3004", "3000", "46110");
+		new Node("attu1.cs.washington.edu", "46101", "3004", "3000", "46110");
 	}
 }
