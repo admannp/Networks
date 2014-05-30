@@ -13,6 +13,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /*
  * Colin Miller, Nick Adman
@@ -27,10 +28,11 @@ import java.util.Set;
 
 public class RouterConnection extends Connection {
 	
-	// The connection to the other node
+	// The connection to another node
 	Socket connection;
 	// Buffer to write to - handled by separate thread
 	RouterConnectionWriteBuffer writeBuffer;
+	Router router;
 	
 	Set<Short> circuitIDs;
 	
@@ -40,7 +42,8 @@ public class RouterConnection extends Connection {
 	 * 
 	 * @param connection, The socket connected to the foreign router
 	 */
-	public RouterConnection(Socket connection) {
+	public RouterConnection(Socket connection, Router router) {
+		this.router = router;
 		System.out.println("ROUTER CONNECTION CREATED. ADDRESS, PORT: "+ connection.getLocalAddress() + ", " + connection.getLocalPort());
 		this.connection = connection;
 		circuitIDs = new HashSet<Short>();
@@ -94,6 +97,7 @@ public class RouterConnection extends Connection {
 				CellFormatter.CellType type = CellFormatter.determineType(incomingMessage);
 				System.out.println(type);
 				byte[] response;
+				Router.RoutingTableKey key;
 				switch(type) {
 					case OPEN:
 						// TODO: figure out how to do timeouts
@@ -103,12 +107,11 @@ public class RouterConnection extends Connection {
 						send(response);
 						break;
 					case OPENED:
-						Random r = new Random();
-						short circuitID = (short) r.nextInt(Short.MAX_VALUE + 1);
-						circuitIDs.add(circuitID);
-						System.out.println("Sending create cell with circuit ID: " + circuitID);
-						response = CellFormatter.createCell("" + circuitID);
-						send(response);
+						String[] agentIDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
+						key = router.new RoutingTableKey(connection, agentIDs[0], agentIDs[1]);
+						if (router.requestResponseMap.containsKey(key)) {
+							router.requestResponseMap.get(key).add(incomingMessage);
+						}
 						break;
 					case OPEN_FAILED:
 						// TODO: Error handling
@@ -121,6 +124,11 @@ public class RouterConnection extends Connection {
 						send(response);
 						break;
 					case CREATED:
+						String circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						key = router.new RoutingTableKey(connection, circuitID, "-1");
+						if (router.requestResponseMap.containsKey(key)) {
+							router.requestResponseMap.get(key).add(incomingMessage);
+						}
 						System.out.println("Created circuit, now extending.");
 						break;
 					case CREATE_FAILED:
@@ -146,6 +154,7 @@ public class RouterConnection extends Connection {
 					case UNKNOWN:
 						// TODO: don't lose points for this
 						System.out.println("HOLY SHIT, ERROR!");
+						System.exit(0);
 						break;
 				}
 				System.out.println("Received incoming cell to router connection at " + 
@@ -171,7 +180,7 @@ public class RouterConnection extends Connection {
 		 */
 		public RouterConnectionWriteBuffer() {
 			// Using linked list for the queue
-			buffer = new LinkedList<byte[]>();
+			buffer = new LinkedBlockingQueue<byte[]>();
 			try {
 				out = new DataOutputStream(connection.getOutputStream());
 			} catch (IOException e) {
