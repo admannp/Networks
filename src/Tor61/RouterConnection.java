@@ -33,6 +33,8 @@ public class RouterConnection extends Connection {
 	// Buffer to write to - handled by separate thread
 	RouterConnectionWriteBuffer writeBuffer;
 	Router router;
+	// True is even, false is odd
+	boolean parity;
 	
 	Set<Short> circuitIDs;
 	
@@ -42,15 +44,17 @@ public class RouterConnection extends Connection {
 	 * 
 	 * @param connection, The socket connected to the foreign router
 	 */
-	public RouterConnection(Socket connection, Router router) {
+	public RouterConnection(Socket connection, Router router, boolean parity) {
 		this.router = router;
 		System.out.println("ROUTER CONNECTION CREATED. ADDRESS, PORT: "+ connection.getLocalAddress() + ", " + connection.getLocalPort());
 		this.connection = connection;
 		circuitIDs = new HashSet<Short>();
 		writeBuffer = new RouterConnectionWriteBuffer();
 		(new Thread(writeBuffer)).start();
-		
+		this.parity = parity;
 	}
+	
+	// TODO: make a circuit ID returning method
 	
 	/**
 	 * Sends the given byte array along the circuit associated with this RouterConnection
@@ -101,16 +105,25 @@ public class RouterConnection extends Connection {
 				switch(type) {
 					case OPEN:
 						// TODO: figure out how to do timeouts
+						// TODO: put the connection in the connection map
+						// Correct??
+						router.connections.put("" + connection.getInetAddress() + connection.getPort(), this);
+						
 						String[] IDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
 						response = CellFormatter.openedCell(IDs[0], IDs[1]);
 						System.out.println("Received open cell with IDs: " + IDs[0] + " " + IDs[1]);
 						send(response);
 						break;
 					case OPENED:
+						// TODO: put the connection in the connection map
+						// Here correct too??
+						router.connections.put("" + connection.getInetAddress() + connection.getPort(), this);
+						
 						String[] agentIDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
-						key = router.new RoutingTableKey(connection, agentIDs[0], agentIDs[1]);
+						key = router.new RoutingTableKey(this, agentIDs[0] + agentIDs[1]);
 						if (router.requestResponseMap.containsKey(key)) {
 							router.requestResponseMap.get(key).add(incomingMessage);
+							router.requestResponseMap.remove(key);
 						}
 						break;
 					case OPEN_FAILED:
@@ -118,16 +131,20 @@ public class RouterConnection extends Connection {
 						System.out.println("Open failed");
 						break;
 					case CREATE:
-						String responseCircuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
-						System.out.println("Received a create cell, responding with created. ID: " + responseCircuitID);
-						response = CellFormatter.createdCell("" + responseCircuitID);
+						String circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						System.out.println("Received a create cell, responding with created. ID: " + circuitID);
+						key = router.new RoutingTableKey(this, circuitID);
+						router.routingTable.put(key, null);
+						response = CellFormatter.createdCell("" + circuitID);
 						send(response);
 						break;
 					case CREATED:
-						String circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
-						key = router.new RoutingTableKey(connection, circuitID, "-1");
+						String responseCircuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						key = router.new RoutingTableKey(this, responseCircuitID);
+						router.routingTable.put(key, null);
 						if (router.requestResponseMap.containsKey(key)) {
 							router.requestResponseMap.get(key).add(incomingMessage);
+							router.requestResponseMap.remove(key);
 						}
 						System.out.println("Created circuit, now extending.");
 						break;
@@ -144,6 +161,37 @@ public class RouterConnection extends Connection {
 					case RELAY_CONNECTED:
 						break;
 					case RELAY_EXTEND:
+						
+						/*******
+						 * TOOO DOOOOOOOO
+						 * 
+						 * Check routing tabling to see if we send extend along or take action
+						 * 
+						 * If take action -> check to see if connection exists already (as is done below)
+						 * 
+						 */
+						
+						circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						String[] extendInformation = CellFormatter.getRelayExtendInformation(incomingMessage);
+						/*
+						 * extendInformation[0] -> IP of node we want
+						 * extendInformation[1] -> port of node we want
+						 * extendInformation[2] -> agentID of node we want
+						 */
+						if (router.connections.containsKey(extendInformation[0] + extendInformation[1])) {
+							// The node already has a connection. Let's grab it and do work.
+							RouterConnection connectionToNode = router.connections.get(extendInformation[0] + extendInformation[1]);
+							
+							// Key is associated with the RouterConnection in which we expect to hear the response
+							// and the circuit it will be on
+							key = router.new RoutingTableKey(connectionToNode, circuitID);
+							CreateResponseTask task = new CreateResponseTask(router, this);
+							router.requestResponseMap.put(key, task.response);
+						} // TODO: deal with the case that it does not already have a connection
+						
+						
+						
+						// key = router.new RoutingTableKey();
 						break;
 					case RELAY_EXTENDED:
 						break;
