@@ -1,9 +1,14 @@
 package Tor61;
 
+import java.util.Map;
+
 
 public class Node {
-	private Proxy proxy;
-	private Router router;
+	Proxy proxy;
+	Router router;
+	RouterConnection circuit;
+	// Stores stream ID -> Proxy Connection
+	Map<Short, ProxyConnection> streamTable;
 	
 	public Node(String registrationServiceAddress, String registrationPort, String groupNumber, String instanceNumber, String HTTPProxyPort) {
 		//TODO: error handling on the above parameters

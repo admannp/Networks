@@ -7,14 +7,22 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
+import java.util.Arrays;
+import java.util.Queue;
+import java.util.Random;
 import java.util.Scanner;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class ProxyConnection extends Connection {
 	
 	Socket connection;
+	Node node;
+	boolean connected;
 	
-	ProxyConnection(Socket connection) {
+	ProxyConnection(Socket connection, Node node) {
 		this.connection = connection;
+		this.node = node;
+		this.connected = false;
 	}
 	
 	@Override
@@ -27,6 +35,10 @@ public class ProxyConnection extends Connection {
 			// Setup output to this client
 			DataOutputStream outToClient = new DataOutputStream(
 					connection.getOutputStream());
+			
+			// Put this ProxyConnection in the Proxy's stream table
+			short streamID = generateStreamID();
+			node.streamTable.put(streamID, this);
 			
 			// Collect header and find host information within
 			String host = "";
@@ -50,6 +62,19 @@ public class ProxyConnection extends Connection {
 			// If a port number is given, use it. Else, assume port 80
 			port = (hostInformation.length > 1) ? 
 					Integer.parseInt(hostInformation[1]) : 80;
+					
+					
+			// CREATE THE STREAM
+					// we have IP + port
+					// get stream number
+			byte[] relayBegin = CellFormatter.relayBeginCell(node.router.thisCircuitID + "", streamID + "", host, port + "");
+			node.circuit.send(relayBegin);
+			
+			// Wait to receive the connected message
+			while(!connected) {}
+			
+			
+			
 
 			// Create socket connected to server, set up output to this server
 			//Socket serverSocket = new Socket(host, port);
@@ -63,26 +88,32 @@ public class ProxyConnection extends Connection {
 			 * This is where we make the cell to go on the TOR network
 			 * 
 			 */
+					
+			byte[][] dataCells = CellFormatter.relayDataCell(node.router.thisCircuitID + "", streamID + "", header + "");
 			
-//			// Prepare to accept input stream from server
-//			DataInputStream inFromServer = new DataInputStream(serverSocket.getInputStream());
-//			ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
-//			
-//			// Accept bytes from server, writing into given buffer 
-//			byte buffer[] = new byte[1024];
-//			for(int s; (s=inFromServer.read(buffer)) != -1; ) {
-//			  serverResponse.write(buffer, 0, s);
-//			}
-//			byte result[] = serverResponse.toByteArray();
-//			
-//			// Send the bytes from the server back to the client
-//			outToClient.write(result);
-//			
+			// Since each data cell can be at max 512 bytes, we have to send
+			// all of them that we received.
+			for (int i = 0; i < dataCells.length; i++) {
+				node.circuit.send(dataCells[i]);
+			}
+				
 		} catch (IOException e) {
 			System.err.println("Error accepting data from client or server: " + e.getMessage());
 		}
 	}
 	
+	/**
+	 * Generates a stream ID that is not already in use on this node
+	 * @return short, the stream ID to use
+	 */
+	public short generateStreamID() {
+		Short streamID;
+		do {
+			Random r = new Random();
+			streamID = (short) r.nextInt(Short.MAX_VALUE + 1);
+		} while (node.streamTable.keySet().contains(streamID));
+		return streamID;
+	}
 	
 	// Parse header, changing connection type to Connection: close, and returning 
 	// the entire header as a String
@@ -124,6 +155,73 @@ public class ProxyConnection extends Connection {
 		
 		// Return the header
 		return header.toString();
+	}
+	
+	// Private inner class used to write information to the outside service,
+	// be it a browser or web server, with which this connection speaks
+	private class ProxyConnectionWriteBuffer implements Runnable {
+		Queue<byte[]> buffer;
+		DataOutputStream out;
+		
+		/**
+		 * Create a new ProxyConnectionWriteBuffer to handle the writing of information
+		 * to a browser or web server
+		 */
+		public ProxyConnectionWriteBuffer() {
+			// Using linked list for the queue
+			buffer = new LinkedBlockingQueue<byte[]>();
+			try {
+				out = new DataOutputStream(connection.getOutputStream());
+			} catch (IOException e) {
+				System.out.println("Unable to create output stream for proxy connection at: " +
+									connection.getLocalAddress() + ", " + connection.getLocalPort());
+				e.getMessage();
+			}
+		}
+		
+		/**
+		 * Put the given byte array into the write buffer (byte array is expected to be in some
+		 * cell format)
+		 * @param cell
+		 */
+		public void put(byte[] cell) {
+			buffer.add(cell);
+		}
+		
+		// Loop forever. When information is in the buffer, send it along the connection
+		public void run() {
+			while (true) {
+				if(!buffer.isEmpty()) {
+					System.out.println("Received data in write buffer for proxy connection at " + 
+										connection.getLocalAddress() + ", " + connection.getLocalPort());
+					System.out.println("Now sending data.");
+					try {
+						byte[] cell = buffer.remove();
+						
+						// CHECK TYPE OF CELL
+						// - if relay connected, flip boolean flag
+						// - if relay data, send to connected browser / server
+						CellFormatter.CellType type = CellFormatter.determineType(cell);
+						if (type == CellFormatter.CellType.RELAY_CONNECTED) {
+							System.out.println("Received relay connected");
+							
+						} else if (type == CellFormatter.CellType.RELAY_CONNECTED) {
+							System.out.println("Received relay data");
+							connected = true;
+						} else {
+							System.out.println("Received unexpected type: " + type);
+						}
+						
+						System.out.println("Data to be sent: " + Arrays.toString(cell));
+						out.write(cell);
+					} catch (IOException e) {
+						System.out.println("Unable to write to output stream for proxy connection at: " +
+								connection.getLocalAddress() + ", " + connection.getLocalPort());
+						e.printStackTrace();
+					}
+				}
+			}
+		}	
 	}
 
 }

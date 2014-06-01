@@ -40,7 +40,7 @@ public class Router {
 	// MAP TO PARITY?
 	// MAP TO CONNECTION OBJECT?
 	
-	public Map<RoutingTableKey, RoutingTableKey> routingTable;
+	public Map<RoutingTableKey, RoutingTableValue> routingTable;
 	public RouterConnection thisCircuit;
 	public short thisCircuitID;
 	public Map<String, RouterConnection> connections;
@@ -73,12 +73,12 @@ public class Router {
 		System.out.println("Creating connections Map");
 		connections = Collections.synchronizedMap(new HashMap<String, RouterConnection>());
 		
-		requestResponseMap = Collections.synchronizedMap(new TreeMap<RoutingTableKey, Queue<byte[]>>());
+		requestResponseMap = Collections.synchronizedMap(new HashMap<RoutingTableKey, Queue<byte[]>>());
 		
 		// Initialize routing table
 		// Use a synchronized map for safe access from multiple threads
 		System.out.println("Initializing the routing table.");
-		routingTable = Collections.synchronizedMap(new HashMap<RoutingTableKey, RoutingTableKey>());
+		routingTable = Collections.synchronizedMap(new HashMap<RoutingTableKey, RoutingTableValue>());
 		
 		// Start the accepting port
 		torNodeListener acceptPort = new torNodeListener(this);
@@ -179,14 +179,37 @@ public class Router {
 		System.out.println("Circuit currently contains " + numHops + " hops.");
 		
 		while(numHops != EXPECTED_NUM_HOPS) {
-			//ret = extendCircuit(registrationHandler, groupNumber);
+			ret = extendCircuit(registrationHandler, groupNumber);
 			numHops++;
 			System.out.println("Circuit currently contains " + numHops + " hops.");
 		}
 		
-		System.out.println("Keys in the connection map: " + connections.keySet());
-		System.out.println("Keys in the routing table:  " + routingTable.keySet());
-		System.out.println("Size of request/response map (should be 0): " + requestResponseMap.size());
+		System.out.println(" --- NOW PERFORMING BASIC SANITY CHECKING ---");
+		if (connections.size() == 2) {
+			System.out.println("[PASSED] connections is of size 2");
+		} else {
+			System.out.println("[FAILED] connections is of size " + connections.size());
+		}
+		if (requestResponseMap.size() == 0) {
+			System.out.println("[PASSED] requestResponseMap is of size 0");
+		} else {
+			System.out.println("[FAILED] requestResponseMap is of size " + requestResponseMap.size());
+		}
+		
+		System.out.println("Printing out contents of the routingTable: ");
+		for (RoutingTableKey k : routingTable.keySet()) {
+			RoutingTableValue v = routingTable.get(k);
+			if (v != null) {
+			System.out.println("RouterConnection (" + k.socket + ") with circuit ID #" + 
+					k.circuitNumber +" -> ("+ v.connection.socket + ", " + v.circuitNumber + ")");
+			} else {
+				System.out.println("RouterConnection (" + k.socket + ") with circuit ID #" + 
+						k.circuitNumber +" -> null");
+			}
+		}
+		System.out.println("Size of the routing table:  " + routingTable.size());
+		
+		node.circuit = thisCircuit;
 		
 		
 		// TODO: figure out how to add connections to the connections map when
@@ -197,7 +220,8 @@ public class Router {
 	 * Extend the length of the circuit by one node. 
 	 */
 	private boolean extendCircuit(RegistrationHandler registrationHandler, String groupNumber) {
-		
+		System.out.println();
+		System.out.println("STARTING EXTEND PROCESS");
 		// RANDOMLY CHOOSE A NEW NODE
 		// CREATE EXTEND CELL WITH IP:PORT agentid
 		// Get randomly chosen registered router's information
@@ -212,10 +236,17 @@ public class Router {
 		requestResponseMap.put(key, task.response);
 		
 		// CREATE THE RELAY EXTEND CELL
-		
+		// Circuit ID: id of the stream used by the circuit starting at this node
+		// Stream ID: doesn't matter for now
+		// IP: ip of randomly chosen router
+		// port: port of randomly chosen router
+		// agentID: agentID of randomly chosen router
+		int[] serviceData = convertServiceDataToInts(nextCircuitNode[2]);
+		String agentID = serviceData[1] + "";
+		byte[] extendCell = CellFormatter.relayExtendCell("" + thisCircuitID, "-1", nextCircuitNode[0], nextCircuitNode[1], agentID);
 		
 		// SEND THE EXTEND CELL ON THIS CIRCUIT
-		//thisCircuit.send(openCell);
+		thisCircuit.send(extendCell);
 		
 		// WAIT FOR TASK TO GET RESPONSE
 		byte[] cell = task.waitOnResponse();
@@ -238,14 +269,14 @@ public class Router {
 		
 		// GET AGENT IDs AND CREATE OPEN CELL
 		// TODO: get the proper other agent ID
-		int[] instanceGroupNumbers = convertGroupStringToInts(nextNodeInformation[2]);
+		int[] instanceGroupNumbers = convertServiceDataToInts(nextNodeInformation[2]);
 		String otherAgentID = instanceGroupNumbers[0] + "";
 		System.out.println("OTHER AGENT ID!!!!!: " + otherAgentID);
 		byte[] openCell = CellFormatter.openCell(thisAgentID, otherAgentID);
 		
 		// CREATE NEW RESPONSE TASK TO GRAB THE RESPONSE
 		// Create response task
-		System.out.println("This connection's hash (in router): " + thisConnection.hashCode());
+		System.out.println("This socket's hash (in router): " + thisConnection.socket.hashCode());
 		System.out.println("ID: " + thisAgentID + otherAgentID);
 		RoutingTableKey key = new RoutingTableKey(thisConnection.socket, thisAgentID + otherAgentID);
 		System.out.println("Key's hash (in Router): " + key.hashCode());
@@ -272,8 +303,7 @@ public class Router {
 		
 		// PICK A CIRCUIT ID FOR THIS CIRCUIT
 		// TODO: USE THE ROUTERCONNECTION OBJECT ITSELF TO GENERATE A NEW CIRCUIT ID!!
-		Random r = new Random();
-		thisCircuitID = (short) r.nextInt(Short.MAX_VALUE + 1);
+		thisCircuitID = thisCircuit.generateCircuitID();
 		
 		// add it to the list of used circuit IDs to ensure future IDs are unique
 		node.circuitIDs.add(thisCircuitID);
@@ -395,7 +425,7 @@ public class Router {
 	 * @return int[], the group number in index 0 and instance number in
 	 * 		   index 1
 	 */
-	private static int[] convertGroupStringToInts(String s) {
+	private static int[] convertServiceDataToInts(String s) {
 		int groupData = Integer.parseInt(s);
 		int instanceNumber = groupData & 0xffff;
 		int groupNumber = groupData >> 16;
@@ -440,7 +470,7 @@ public class Router {
 				return false;
 			if (!circuitNumber.equals(other.circuitNumber))
 				return false;
-			if (socket.equals(other.socket))
+			if (!socket.equals(other.socket))
 				return false;
 			return true;
 		}
