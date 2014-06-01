@@ -429,7 +429,7 @@ public class CellFormatter {
 	 * @param cell, a byte[] representing a valid relay data cell
 	 * @return String, the body data in this cell
 	 * 		   null if the cell is not properly formatted
-	 * 		   null if the cell is not a relay extend cell
+	 * 		   null if the cell is not a relay data cell
 	 */
 	public static String getRelayDataInformation(byte[] cell) {
 		if (cell.length != 512)
@@ -557,6 +557,20 @@ public class CellFormatter {
 		}
 	}
 	
+	/**
+	 * The isRelayDataFull method takes in a relay data
+	 * cell and returns whether the cell's body contains
+	 * the maximum number of bytes allowed
+	 * 
+	 * @param cell, a byte[] representing a valid relay data cell
+	 * @return true if the cell's body is full, false otherwise
+	 */
+	public static boolean isRelayDataFull(byte[] cell) {
+		byte[] bodyLengthBytes = new byte[] {0, 0, cell[11], cell[12]};
+		int bodyLength = byteArrayToInt(bodyLengthBytes);
+		return bodyLength == 498;
+	}
+	
 	/*
 	 * Helper method to convert a byte array to an integer
 	 */
@@ -627,11 +641,10 @@ public class CellFormatter {
 			body += (char) message[0][i + 14];
 		}
 		System.out.println(body);
-		CellType type = determineType(new byte[] {0, 0, 0});*/
+		System.out.println(isRelayDataFull(message[0]));*/
+		//CellType type = determineType(new byte[] {0, 0, 0});
 		//byte[] message = relayExtendedCell("321", "789");
 		//String agents = getCircuitIDFromCell(message);
 		//int[] nums = convertGroupStringToInts("805580800");
-		byte[] relayBegin = relayExtendCell("321", "987", "localhost", "5656", "0060");
-		String[] parts = getRelayExtendInformation(relayBegin);
 	}
 }
