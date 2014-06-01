@@ -27,6 +27,9 @@ import java.util.Scanner;
  */
 
 
+
+import java.util.TreeMap;
+
 import registrationProtocol.RegistrationHandler;
 
 public class Router {
@@ -69,9 +72,9 @@ public class Router {
 
 		// Initialize set of connections
 		System.out.println("Creating connections Map");
-		connections = new HashMap<String, RouterConnection>();
+		connections = Collections.synchronizedMap(new HashMap<String, RouterConnection>());
 		
-		requestResponseMap = Collections.synchronizedMap(new HashMap<RoutingTableKey, Queue<byte[]>>());
+		requestResponseMap = Collections.synchronizedMap(new TreeMap<RoutingTableKey, Queue<byte[]>>());
 		
 		// Initialize routing table
 		// Use a synchronized map for safe access from multiple threads
@@ -138,7 +141,7 @@ public class Router {
 		
 		/************************** START CIRCUIT CREATION *****************************/
 		
-		// Get all registered routers, and return information about a random one
+		// Get randomly chosen registered router's information
 		String[] nextCircuitNode = getRegisteredRouter(registrationHandler, groupNumber);
 		
 		// TODO: Check that we are not already connected to this other node
@@ -177,7 +180,7 @@ public class Router {
 		System.out.println("Circuit currently contains " + numHops + " hops.");
 		
 		while(numHops != EXPECTED_NUM_HOPS) {
-			ret = extendCircuit();
+			//ret = extendCircuit(registrationHandler, groupNumber);
 			numHops++;
 			System.out.println("Circuit currently contains " + numHops + " hops.");
 		}
@@ -194,18 +197,32 @@ public class Router {
 	/**
 	 * Extend the length of the circuit by one node. 
 	 */
-	private boolean extendCircuit() {
+	private boolean extendCircuit(RegistrationHandler registrationHandler, String groupNumber) {
 		
 		// RANDOMLY CHOOSE A NEW NODE
 		// CREATE EXTEND CELL WITH IP:PORT agentid
+		// Get randomly chosen registered router's information
+		String[] nextCircuitNode = getRegisteredRouter(registrationHandler, groupNumber);
 		
 		// CREATE A RESPONSE TASK TO WAIT FOR RESPONSE, PUT IN MAP WITH (thisCircuit, circuit n) => task's queue
+		// CREATE NEW RESPONSE TASK TO GRAB THE RESPONSE
+		// Create response task, waiting on a response sent to the starting RouterConnection of the circuit
+		// belonging to this node, and the circuit ID used for this circuit on this RouterConnection
+		RoutingTableKey key = new RoutingTableKey(thisCircuit.socket, "" + thisCircuitID);
+		ResponseTask task = new ResponseTask();
+		requestResponseMap.put(key, task.response);
+		
+		// CREATE THE RELAY EXTEND CELL
+		
 		
 		// SEND THE EXTEND CELL ON THIS CIRCUIT
+		//thisCircuit.send(openCell);
 		
 		// WAIT FOR TASK TO GET RESPONSE
-		
-		return false;
+		byte[] cell = task.waitOnResponse();
+		CellFormatter.CellType type = CellFormatter.determineType(cell);
+		return checkTaskTypeReturn(type, CellFormatter.CellType.RELAY_EXTENDED, CellFormatter.CellType.RELAY_EXTEND_FAILED);
+
 	}
 	
 	// TODO: don't forget timeout
@@ -229,7 +246,10 @@ public class Router {
 		
 		// CREATE NEW RESPONSE TASK TO GRAB THE RESPONSE
 		// Create response task
-		RoutingTableKey key = new RoutingTableKey(thisConnection, thisAgentID + otherAgentID);
+		System.out.println("This connection's hash (in router): " + thisConnection.hashCode());
+		System.out.println("ID: " + thisAgentID + otherAgentID);
+		RoutingTableKey key = new RoutingTableKey(thisConnection.socket, thisAgentID + otherAgentID);
+		System.out.println("Key's hash (in Router): " + key.hashCode());
 		ResponseTask task = new ResponseTask();
 		requestResponseMap.put(key, task.response);
 		System.out.println("Hash code for key in openConnection: " + key.hashCode());
@@ -240,6 +260,7 @@ public class Router {
 
 		thisConnection.send(openCell);
 		byte[] cell = task.waitOnResponse();
+		System.out.println("Stopped waiting for open");
 		CellFormatter.CellType type = CellFormatter.determineType(cell);
 		return checkTaskTypeReturn(type, CellFormatter.CellType.OPENED, CellFormatter.CellType.OPEN_FAILED);
 	}
@@ -265,7 +286,7 @@ public class Router {
 		// PUT RESPONSE QUEUE INTO MAP, FOR USE ON RETURN
 		// Create queue for listening to response to request
 		// And put the queue in the map, with a key associated with this open request
-		RoutingTableKey key = new RoutingTableKey(node, "" + thisCircuitID);
+		RoutingTableKey key = new RoutingTableKey(node.socket, "" + thisCircuitID);
 		ResponseTask task = new ResponseTask();
 		requestResponseMap.put(key, task.response);
 		System.out.println("Hash code for key in createConnection: " + key.hashCode());
@@ -387,11 +408,11 @@ public class Router {
 	// Private class used in the routing table storing the necessary information
 	// for keys in the table
 	public class RoutingTableKey {
-		RouterConnection connection;
+		Socket socket;
 		String circuitNumber;
 		
-		public RoutingTableKey(RouterConnection connection, String cN) {
-			this.connection = connection;
+		public RoutingTableKey(Socket socket, String cN) {
+			this.socket = socket;
 			circuitNumber = cN;
 		}
 
@@ -403,7 +424,7 @@ public class Router {
 			int result = 1;
 			result = prime * result + getOuterType().hashCode();
 			result = prime * result + circuitNumber.hashCode();
-			result = prime * result + connection.hashCode();
+			result = prime * result + socket.hashCode();
 			return result;
 		}
 		
@@ -422,7 +443,7 @@ public class Router {
 				return false;
 			if (!circuitNumber.equals(other.circuitNumber))
 				return false;
-			if (connection.equals(other.connection))
+			if (socket.equals(other.socket))
 				return false;
 			return true;
 		}
@@ -431,6 +452,19 @@ public class Router {
 			return Router.this;
 		}
 		
+	}
+	
+	// Private class used in the routing table storing the necessary information
+	// for keys in the table
+	public class RoutingTableValue {
+		RouterConnection connection;
+		String circuitNumber;
+		
+		public RoutingTableValue(RouterConnection connection, String cN) {
+			this.connection = connection;
+			circuitNumber = cN;
+		}
+
 	}
 	
 	// Private class that acts at the Tor listener, listening for and accepting 

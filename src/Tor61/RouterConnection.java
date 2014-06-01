@@ -15,6 +15,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import Tor61.Router.RoutingTableKey;
+
 /*
  * Colin Miller, Nick Adman
  * 
@@ -29,7 +31,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class RouterConnection extends Connection {
 	
 	// The connection to another node
-	Socket connection;
+	Socket socket;
 	// Buffer to write to - handled by separate thread
 	RouterConnectionWriteBuffer writeBuffer;
 	Router router;
@@ -47,7 +49,7 @@ public class RouterConnection extends Connection {
 	public RouterConnection(Socket connection, Router router, boolean parity) {
 		this.router = router;
 		System.out.println("ROUTER CONNECTION CREATED. ADDRESS, PORT: "+ connection.getLocalAddress() + ", " + connection.getLocalPort());
-		this.connection = connection;
+		this.socket = connection;
 		circuitIDs = new HashSet<Short>();
 		writeBuffer = new RouterConnectionWriteBuffer();
 		(new Thread(writeBuffer)).start();
@@ -74,7 +76,7 @@ public class RouterConnection extends Connection {
 			System.out.println("Waiting for incoming cells.");
 			
 			// Prepare to accept input stream from server
-			DataInputStream input = new DataInputStream(connection.getInputStream());
+			DataInputStream input = new DataInputStream(socket.getInputStream());
 			
 			
 			while (true) {
@@ -107,7 +109,7 @@ public class RouterConnection extends Connection {
 						// TODO: figure out how to do timeouts
 						// TODO: put the connection in the connection map
 						// Correct??
-						router.connections.put("" + connection.getInetAddress() + connection.getPort(), this);
+						router.connections.put("" + socket.getInetAddress() + socket.getPort(), this);
 						
 						String[] IDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
 						response = CellFormatter.openedCell(IDs[0], IDs[1]);
@@ -117,14 +119,24 @@ public class RouterConnection extends Connection {
 					case OPENED:
 						// TODO: put the connection in the connection map
 						// Here correct too??
-						router.connections.put("" + connection.getInetAddress() + connection.getPort(), this);
-						
+						router.connections.put("" + socket.getInetAddress() + socket.getPort(), this);
+						System.out.println("This connection's hash code(in RouterConnection): " + this.hashCode());
 						String[] agentIDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
-						key = router.new RoutingTableKey(this, agentIDs[0] + agentIDs[1]);
+						System.out.println("ID: " + agentIDs[0] + agentIDs[1]);
+						key = router.new RoutingTableKey(this.socket, agentIDs[0] + agentIDs[1]);
+						System.out.println("Key's hash (in RouterConnection): " + key.hashCode());
+						System.out.println("Hashes for keys in requestResponseMap:");
+						System.out.println(router.requestResponseMap.containsKey(key));
+						for (RoutingTableKey keySetKey : router.requestResponseMap.keySet()) {
+							System.out.println("Key: " + keySetKey.hashCode());
+						}
+						
 						if (router.requestResponseMap.containsKey(key)) {
+							System.out.println("In here");
 							router.requestResponseMap.get(key).add(incomingMessage);
 							router.requestResponseMap.remove(key);
 						}
+						System.out.println("HEY");
 						break;
 					case OPEN_FAILED:
 						// TODO: Error handling
@@ -133,14 +145,14 @@ public class RouterConnection extends Connection {
 					case CREATE:
 						String circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
 						System.out.println("Received a create cell, responding with created. ID: " + circuitID);
-						key = router.new RoutingTableKey(this, circuitID);
+						key = router.new RoutingTableKey(this.socket, circuitID);
 						router.routingTable.put(key, null);
 						response = CellFormatter.createdCell("" + circuitID);
 						send(response);
 						break;
 					case CREATED:
 						String responseCircuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
-						key = router.new RoutingTableKey(this, responseCircuitID);
+						key = router.new RoutingTableKey(this.socket, responseCircuitID);
 						router.routingTable.put(key, null);
 						if (router.requestResponseMap.containsKey(key)) {
 							router.requestResponseMap.get(key).add(incomingMessage);
@@ -184,7 +196,7 @@ public class RouterConnection extends Connection {
 							
 							// Key is associated with the RouterConnection in which we expect to hear the response
 							// and the circuit it will be on
-							key = router.new RoutingTableKey(connectionToNode, circuitID);
+							key = router.new RoutingTableKey(connectionToNode.socket, circuitID);
 							CreateResponseTask task = new CreateResponseTask(router, this);
 							router.requestResponseMap.put(key, task.response);
 						} // TODO: deal with the case that it does not already have a connection
@@ -206,12 +218,12 @@ public class RouterConnection extends Connection {
 						break;
 				}
 				System.out.println("Received incoming cell to router connection at " + 
-									connection.getLocalAddress() + ", " + connection.getLocalPort());
+									socket.getLocalAddress() + ", " + socket.getLocalPort());
 				
 			}
 		} catch (IOException e) {
 			System.out.println("Unable to read information incoming to router connection at: " + 
-								connection.getLocalAddress() + ", " + connection.getLocalPort());
+								socket.getLocalAddress() + ", " + socket.getLocalPort());
 			e.printStackTrace();
 		}
 	}
@@ -230,10 +242,10 @@ public class RouterConnection extends Connection {
 			// Using linked list for the queue
 			buffer = new LinkedBlockingQueue<byte[]>();
 			try {
-				out = new DataOutputStream(connection.getOutputStream());
+				out = new DataOutputStream(socket.getOutputStream());
 			} catch (IOException e) {
 				System.out.println("Unable to create output stream for router connection at: " +
-									connection.getLocalAddress() + ", " + connection.getLocalPort());
+									socket.getLocalAddress() + ", " + socket.getLocalPort());
 				e.getMessage();
 			}
 		}
@@ -252,7 +264,7 @@ public class RouterConnection extends Connection {
 			while (true) {
 				if(!buffer.isEmpty()) {
 					System.out.println("Received data in write buffer for router connection at " + 
-										connection.getLocalAddress() + ", " + connection.getLocalPort());
+										socket.getLocalAddress() + ", " + socket.getLocalPort());
 					System.out.println("Now sending data.");
 					try {
 						byte[] cell = buffer.remove();
@@ -260,7 +272,7 @@ public class RouterConnection extends Connection {
 						out.write(cell);
 					} catch (IOException e) {
 						System.out.println("Unable to write to output stream for router connection at: " +
-								connection.getLocalAddress() + ", " + connection.getLocalPort());
+								socket.getLocalAddress() + ", " + socket.getLocalPort());
 						e.printStackTrace();
 					}
 				}
