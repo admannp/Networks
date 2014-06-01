@@ -8,7 +8,7 @@ public class Node {
 	Router router;
 	RouterConnection circuit;
 	// Stores stream ID -> Proxy Connection
-	Map<Short, ProxyConnection> streamTable;
+	Map<StreamTableKey, ProxyConnection> streamTable;
 	
 	public Node(String registrationServiceAddress, String registrationPort, String groupNumber, String instanceNumber, String HTTPProxyPort) {
 		//TODO: error handling on the above parameters

@@ -47,6 +47,7 @@ public class Router {
 	// Maps from input circuit / socket to Queue
 	public Map<RoutingTableKey, Queue<byte[]>> requestResponseMap;
 	public int numHops;
+	public Node node;
 	
 	// Passed in reference to containing node, host name of registration service, and the port
 	// to contact the registration service at.
@@ -68,6 +69,8 @@ public class Router {
 			// Repeat if failed
 			// Relay extend
 		
+		// Set node
+		this.node = node;
 
 		// Initialize set of connections
 		System.out.println("Creating connections Map");

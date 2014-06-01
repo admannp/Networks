@@ -6,7 +6,11 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -30,7 +34,7 @@ import Tor61.Router.RoutingTableValue;
  * 
  */
 
-public class RouterConnection extends Connection {
+public class RouterConnection implements Runnable {
 	
 	// The connection to another node
 	Socket socket;
@@ -176,8 +180,6 @@ public class RouterConnection extends Connection {
 					case RELAY_BEGIN:
 						
 						// LOOK IN ROUTING TABLE
-						
-						String[] relayInformation = CellFormatter.getRelayBeginInformation(incomingMessage);
 						circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
 						
 						key = router.new RoutingTableKey(this.socket, circuitID);
@@ -196,14 +198,37 @@ public class RouterConnection extends Connection {
 						// forward data as specified in the routing table
 						if (value != null) {
 							
-							
-							
-							
+							CellFormatter.setCircuitID(incomingMessage, value.circuitNumber);
+							value.connection.send(incomingMessage);	
 							
 						// IF CONNECTION IS NULL
 						// create da new proxyconnection and connect to the IP / port in the
 						// relay begin cell
 						} else {
+							String[] relayInformation = CellFormatter.getRelayBeginInformation(incomingMessage);
+							String streamID = CellFormatter.getStreamIDFromCell(incomingMessage);
+							for (String s : relayInformation)
+								System.out.println(s);
+							int port = Integer.parseInt(relayInformation[1].substring(0, relayInformation[1].length() - 1));
+							System.out.println(port);
+							try {
+								Socket socketToServer = new Socket();
+								socketToServer.connect(new InetSocketAddress(relayInformation[0], port), 2000);
+								System.out.println("Connected to socket at Addr, port: " + socketToServer.getInetAddress() + " " + socketToServer.getPort());
+								ProxyConnection serverConnection = new ProxyConnection(socketToServer, router.node);
+								//new Thread(serverConnection.new ProxyConnectionReadBuffer(this.socket)).start();
+								router.node.streamTable.put(new StreamTableKey(circuitID, streamID), serverConnection);
+								byte[] relayConnected = CellFormatter.relayConnectedCell(circuitID, streamID);
+								// TODO: figure out why adding router.thisCircuit. makes this fail every time 
+								// (the send buffer thinks it is at the end of the circuit, so just sends the message
+								// to the proxy)
+								send(relayConnected);
+							} catch (IOException e) {
+								// Send the relay begin failed message
+								byte[] relayFailed = CellFormatter.relayBeginFailedCell(circuitID, streamID);
+								send(relayFailed);
+								System.out.println("Connection failed");
+							}
 							
 						}
 						
@@ -214,37 +239,75 @@ public class RouterConnection extends Connection {
 						
 						break;
 					case RELAY_DATA:
+						
 						// LOOK IN ROUTING TABLE
-						//String[] relayInformation = CellFormatter
+						circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						
+						key = router.new RoutingTableKey(this.socket, circuitID);
 						
 						// IF CONNECTION NOT PRESENT 
-							// DROP IT
+						// DROP IT
+						if (!router.routingTable.keySet().contains(key)) {
+							System.out.println("Unable to route rellay begin; no entry in routing table");
+							System.exit(1);
+						}
+						
+						value = router.routingTable.get(key);
 						
 						// IF CONNECTION PRESENT
-							// change circuit ID
-							// forward data as specified in the routing table
-						
+						// change circuit ID
+						// forward data as specified in the routing table
+						if (value != null) {
+							CellFormatter.setCircuitID(incomingMessage, value.circuitNumber);
+							value.connection.send(incomingMessage);	
+							
 						// IF CONNECTION IS NULL
-							// create da new proxyconnection and connect to the IP / port in the
-							// relay begin cell
+						// create da new proxyconnection and connect to the IP / port in the
+						// relay begin cell
+						} else {
+							String streamID = CellFormatter.getStreamIDFromCell(incomingMessage);
+							StreamTableKey streamKey = new StreamTableKey(circuitID, streamID);
+							router.node.streamTable.get(streamKey).send(incomingMessage);
+						}
 						
 						break;
 					case RELAY_END:
 						break;
 					case RELAY_CONNECTED:
 						// LOOK IN ROUTING TABLE
-						//String[] relayInformation = CellFormatter
+						circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						
+						key = router.new RoutingTableKey(this.socket, circuitID);
 						
 						// IF CONNECTION NOT PRESENT 
-							// DROP IT
+						// DROP IT
+						if (!router.routingTable.keySet().contains(key)) {
+							System.out.println("Unable to route rellay begin; no entry in routing table");
+							System.exit(1);
+						}
+						
+						value = router.routingTable.get(key);
 						
 						// IF CONNECTION PRESENT
-							// change circuit ID
-							// forward data as specified in the routing table
-						
+						// change circuit ID
+						// forward data as specified in the routing table
+						if (value != null) {
+							CellFormatter.setCircuitID(incomingMessage, value.circuitNumber);
+							value.connection.send(incomingMessage);	
+							
 						// IF CONNECTION IS NULL
-							// create da new proxyconnection and connect to the IP / port in the
-							// relay begin cell
+						// create da new proxyconnection and connect to the IP / port in the
+						// relay begin cell
+						} else {
+							String streamID = CellFormatter.getStreamIDFromCell(incomingMessage);
+							StreamTableKey streamKey = new StreamTableKey(circuitID, streamID);
+							for (StreamTableKey keykey : router.node.streamTable.keySet()) {
+								System.out.println("Stream, circuit IDS: " + keykey.streamID + " " + keykey.circuitID);
+							}
+							System.out.println("HEYHEYHEY STREAM, CIRCUIT: " + streamID + " " + circuitID);
+							router.node.streamTable.get(streamKey).send(incomingMessage);
+						}
+						
 						
 						break;
 					case RELAY_EXTEND:

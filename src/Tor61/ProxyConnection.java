@@ -13,12 +13,14 @@ import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class ProxyConnection extends Connection {
+public class ProxyConnection implements Runnable {
 	
 	Socket connection;
 	Node node;
 	boolean connected;
 	ProxyConnectionWriteBuffer writeBuffer;
+	String streamID;
+	String header;
 	
 	ProxyConnection(Socket connection, Node node) {
 		this.connection = connection;
@@ -39,7 +41,7 @@ public class ProxyConnection extends Connection {
 			
 			// Put this ProxyConnection in the Proxy's stream table
 			short streamID = generateStreamID();
-			node.streamTable.put(streamID, this);
+			node.streamTable.put(new StreamTableKey(node.router.thisCircuitID, streamID), this);
 			
 			// Collect header and find host information within
 			String host = "";
@@ -63,18 +65,16 @@ public class ProxyConnection extends Connection {
 			// If a port number is given, use it. Else, assume port 80
 			port = (hostInformation.length > 1) ? 
 					Integer.parseInt(hostInformation[1]) : 80;
-					
+			
+			System.out.println("~~~~!!!!!~~~~~HERE~~~~~!!!!!~~~~");
 					
 			// CREATE THE STREAM
 					// we have IP + port
 					// get stream number
+					
+			// CREATE THE STREAM BY SENDING RELAY BEGIN CELL
 			byte[] relayBegin = CellFormatter.relayBeginCell(node.router.thisCircuitID + "", streamID + "", host, port + "");
 			node.circuit.send(relayBegin);
-			
-			// Wait to receive the connected message
-			while(!connected) {}
-			
-			
 			
 
 			// Create socket connected to server, set up output to this server
@@ -89,32 +89,54 @@ public class ProxyConnection extends Connection {
 			 * This is where we make the cell to go on the TOR network
 			 * 
 			 */
-					
-			byte[][] dataCells = CellFormatter.relayDataCell(node.router.thisCircuitID + "", streamID + "", header + "");
-			
-			// Since each data cell can be at max 512 bytes, we have to send
-			// all of them that we received.
-			for (int i = 0; i < dataCells.length; i++) {
-				node.circuit.send(dataCells[i]);
-			}
-			
-			
+			this.streamID = streamID + "";
+			this.header = header + "\r\n\r\n";
+						
 			// DONE WITH STREAM CREATION, START SENDING ANY INCOMING DATA ALONG STREAM
 			
-			while(true) {
-				
-				// if there is information from the client
-				// pack information into realy data cells
-				// send relay data cells along our stream
-				
-				
-			}
+			
+			// Wait to receive the connected message	
 			
 			
-			
-			
-			
-			
+			/**********
+			 * DO WE EVEN NEED TO RESPOND HERE???
+			 * - just send header, wait for response from server, shut down connection??
+			 * 
+			 * 
+			 * 
+			 * 
+			 * 
+			 * 
+			 * 
+			 * 
+			 */
+//			
+//			// TODO: BLOCK TO MAKE SURE CONNECTION ESTABLISHED CORRECTLY
+//			while(true) {
+//				System.out.println("~~~~~~~~~WAITING TO SEND~~~~~~~~~~");
+//				// if there is information from the client
+//				// pack information into realy data cells
+//				// send relay data cells along our stream
+//				
+//				// Prepare to accept input stream from server
+//				DataInputStream inFromServer = new DataInputStream(connection.getInputStream());
+//				ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
+//				
+//				// Accept bytes from server, writing into given buffer 
+//				byte buffer[] = new byte[1024];
+//				for(int s; (s=inFromServer.read(buffer)) != -1; ) {
+//				  serverResponse.write(buffer, 0, s);
+//				}
+//				String result = serverResponse.toString();
+//				System.out.print(result);
+//				// SEND BYTES ALONG THE CIRCUIT
+//				byte[][] dataCells = CellFormatter.relayDataCell(node.router.thisCircuitID + "", streamID + "", result);
+//				for (int i = 0; i < dataCells.length; i++) {
+//					node.router.thisCircuit.send(dataCells[i]);
+//				}
+//				
+//			}
+					
 			
 				
 		} catch (IOException e) {
@@ -225,23 +247,92 @@ public class ProxyConnection extends Connection {
 					System.out.println("Now sending data.");
 					try {
 						byte[] cell = buffer.remove();
-						
+						String streamID = CellFormatter.getStreamIDFromCell(cell);
 						// CHECK TYPE OF CELL
 						// - if relay connected, flip boolean flag
 						// - if relay data, send to connected browser / server
 						CellFormatter.CellType type = CellFormatter.determineType(cell);
 						if (type == CellFormatter.CellType.RELAY_CONNECTED) {
 							System.out.println("Received relay connected");
+							byte[][] dataCells = CellFormatter.relayDataCell(node.router.thisCircuitID + "", streamID + "", header);
 							
-						} else if (type == CellFormatter.CellType.RELAY_CONNECTED) {
-							System.out.println("Received relay data");
+							// Since each data cell can be at max 512 bytes, we have to send
+							// all of them that we received.
+							for (int i = 0; i < dataCells.length; i++) {
+								node.circuit.send(dataCells[i]);
+							}
+							System.out.println("!!~~!!~~SENT ALL DATA~~!!~~!!");
 							connected = true;
+						} else if (type == CellFormatter.CellType.RELAY_DATA) {
+							System.out.println("Received relay data");
+							System.out.println("Data to be sent: " + Arrays.toString(cell));
+							String data = CellFormatter.getRelayDataInformation(cell);
+							System.out.println(data);
+							byte[] output = data.getBytes();
+							//for (int i = 0; i < output.length; i++) {
+							System.out.println("Writing relay data to socket at IP, port: " + connection.getInetAddress() + " " + connection.getPort());
+								out.writeBytes(data);
+							System.out.println("Data written");
+							//} 
+								
+								
+								/***
+								 * 
+								 * NOTE TO SELF::: THIS IS WHERE I WAS WAITING FOR SERVER RESPONSE, 
+								 * AND COULD GET A MALFORMED ERROR TO SEND BACK TO THE CLIENT
+								 * 
+								 * 
+								 * 
+								 * 
+								 */
+							
+							if (data.contains("\r\n\r\n")) {
+								
+								DataInputStream input = new DataInputStream(connection.getInputStream());
+								
+								System.out.println("WAITING FOR DATA FROM IP, PORT: " + connection.getInetAddress() + " " + connection.getPort());
+								// if there is information from the client
+								// pack information into realy data cells
+								// send relay data cells along our stream
+								
+								// Prepare to accept input stream from server
+								ByteArrayOutputStream serverResponse = new ByteArrayOutputStream();
+								
+								// Accept bytes from server, writing into given buffer 
+								byte buffer[] = new byte[1024];
+								for(int s; (s=input.read(buffer)) != -1; ) {
+								  serverResponse.write(buffer, 0, s);
+								}
+								String result = serverResponse.toString();
+								System.out.println("RESPONSE TO INCOMING INFORMATION");
+								System.out.print(result);
+								// SEND BYTES ALONG THE CIRCUIT
+								byte[][] dataCells = CellFormatter.relayDataCell(node.router.thisCircuitID + "", streamID + "", result);
+								for (int i = 0; i < dataCells.length; i++) {
+									node.router.thisCircuit.send(dataCells[i]);
+								}
+							}
+							
+							
+							
+							
+							
+							
+							/**
+							 * 
+							 * END TEST AREA
+							 * 
+							 * 
+							 * 
+							 */
+							
+							
 						} else {
 							System.out.println("Received unexpected type: " + type);
+							//throw new IOException();
 						}
 						
-						System.out.println("Data to be sent: " + Arrays.toString(cell));
-						out.write(cell);
+						
 					} catch (IOException e) {
 						System.out.println("Unable to write to output stream for proxy connection at: " +
 								connection.getLocalAddress() + ", " + connection.getLocalPort());

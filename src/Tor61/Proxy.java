@@ -15,7 +15,7 @@ public class Proxy {
 	
 	public Proxy(Node node, int HTTPProxyPort) {
 		this.node = node;
-		node.streamTable = Collections.synchronizedMap(new HashMap<Short, ProxyConnection>());
+		node.streamTable = Collections.synchronizedMap(new HashMap<StreamTableKey, ProxyConnection>());
 		ProxyConnectionAcceptor pca = new ProxyConnectionAcceptor(HTTPProxyPort, this);
 		(new Thread(pca)).start();
 	}
