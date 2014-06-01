@@ -540,6 +540,23 @@ public class CellFormatter {
 		}
 	}
 	
+	/**
+	 * Given a Tor61 cell and circuit ID, changes the current circuit ID
+	 * in the cell to the new circuit ID. Since the byte[] is passed by
+	 * reference, the return is void.
+	 * 
+	 * @param cell, byte[] representing a Tor61 cell
+	 * @param circuitID
+	 */
+	public static void setCircuitID(byte[] cell, String circuitID) {
+		if (cell.length != 512)
+			System.out.println("WARNING!!!! IMPROPERLY FORMATTED TOR61 CELL FOUND IN setCircuitID");
+		byte[] circuitIDBytes = intToByteArray(Integer.parseInt(circuitID));
+		for (int i = 2; i < circuitIDBytes.length; i++) {
+			cell[i - 2] = circuitIDBytes[i];
+		}
+	}
+	
 	/*
 	 * Helper method to convert a byte array to an integer
 	 */
