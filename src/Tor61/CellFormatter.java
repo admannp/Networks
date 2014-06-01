@@ -398,6 +398,54 @@ public class CellFormatter {
 	}
 	
 	/**
+	 * The getRelayBeginInformation method takes in a relay begin
+	 * cell and returns the host identifier and port in a String[]
+	 * 
+	 * @param cell, a byte[] representing a valid relay begin cell
+	 * @return String[], where index 0 is the host identifier and 
+	 * 		   index 1 is the port
+	 * 		   null if the cell is not properly formatted
+	 * 		   null if the cell is not a relay extend cell
+	 */
+	public static String[] getRelayBeginInformation(byte[] cell) {
+		if (cell.length != 512)
+			return null;
+		if (cell[2] != 0x03 || cell[13] != 0x01)
+			return null;
+		byte[] bodyLengthBytes = new byte[] {0, 0, cell[11], cell[12]};
+		int bodyLength = byteArrayToInt(bodyLengthBytes);
+		String body = "";
+		for (int i = 0; i < bodyLength; i++) {
+			body += (char) cell[i + 14];
+		}
+		String[] parts = body.split("[:]");
+		return parts;
+	}
+	
+	/**
+	 * The getRelayDataInformation method takes in a relay data
+	 * cell and returns the body data associated with it
+	 * 
+	 * @param cell, a byte[] representing a valid relay data cell
+	 * @return String, the body data in this cell
+	 * 		   null if the cell is not properly formatted
+	 * 		   null if the cell is not a relay extend cell
+	 */
+	public static String getRelayDataInformation(byte[] cell) {
+		if (cell.length != 512)
+			return null;
+		if (cell[2] != 0x03 || cell[13] != 0x02)
+			return null;
+		byte[] bodyLengthBytes = new byte[] {0, 0, cell[11], cell[12]};
+		int bodyLength = byteArrayToInt(bodyLengthBytes);
+		String body = "";
+		for (int i = 0; i < bodyLength; i++) {
+			body += (char) cell[i + 14];
+		}
+		return body;
+	}
+	
+	/**
 	 * The relayExtendedCell takes in a circuit ID and stream ID 
 	 * and returns a properly formatted Tor61 cell.
 	 * 
@@ -473,6 +521,23 @@ public class CellFormatter {
 			message[i] = (byte) 0x00;
 		}
 		return message;
+	}
+	
+	/**
+	 * Given a Tor61 cell and stream ID, changes the current stream ID
+	 * in the cell to the new stream ID. Since the byte[] is passed by
+	 * reference, the return is void.
+	 * 
+	 * @param cell, byte[] representing a Tor61 cell
+	 * @param streamID
+	 */
+	public static void setStreamID(byte[] cell, String streamID) {
+		if (cell.length != 512)
+			System.out.println("WARNING!!!! IMPROPERLY FORMATTED TOR61 CELL FOUND IN setStreamID");
+		byte[] streamIDBytes = intToByteArray(Integer.parseInt(streamID));
+		for (int i = 2; i < streamIDBytes.length; i++) {
+			cell[i + 1] = streamIDBytes[i];
+		}
 	}
 	
 	/*

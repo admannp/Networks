@@ -18,11 +18,14 @@ public class ProxyConnection extends Connection {
 	Socket connection;
 	Node node;
 	boolean connected;
+	ProxyConnectionWriteBuffer writeBuffer;
 	
 	ProxyConnection(Socket connection, Node node) {
 		this.connection = connection;
 		this.node = node;
 		this.connected = false;
+		writeBuffer = new ProxyConnectionWriteBuffer();
+		(new Thread(writeBuffer)).start();
 	}
 	
 	@Override
@@ -32,9 +35,7 @@ public class ProxyConnection extends Connection {
 			// Connect a read buffer to the input from the client
 			BufferedReader inFromClient = new BufferedReader(
 					new InputStreamReader(connection.getInputStream()));
-			// Setup output to this client
-			DataOutputStream outToClient = new DataOutputStream(
-					connection.getOutputStream());
+
 			
 			// Put this ProxyConnection in the Proxy's stream table
 			short streamID = generateStreamID();
@@ -96,6 +97,25 @@ public class ProxyConnection extends Connection {
 			for (int i = 0; i < dataCells.length; i++) {
 				node.circuit.send(dataCells[i]);
 			}
+			
+			
+			// DONE WITH STREAM CREATION, START SENDING ANY INCOMING DATA ALONG STREAM
+			
+			while(true) {
+				
+				// if there is information from the client
+				// pack information into realy data cells
+				// send relay data cells along our stream
+				
+				
+			}
+			
+			
+			
+			
+			
+			
+			
 				
 		} catch (IOException e) {
 			System.err.println("Error accepting data from client or server: " + e.getMessage());
@@ -155,6 +175,14 @@ public class ProxyConnection extends Connection {
 		
 		// Return the header
 		return header.toString();
+	}
+	
+	/**
+	 * Sends the given byte array to the connected client
+	 * @param cell, the byte array to be sent
+	 */
+	public void send(byte[] cell) {
+		writeBuffer.put(cell);
 	}
 	
 	// Private inner class used to write information to the outside service,

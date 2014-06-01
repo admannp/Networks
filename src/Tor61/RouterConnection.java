@@ -58,7 +58,6 @@ public class RouterConnection extends Connection {
 		this.parity = parity;
 	}
 	
-	// TODO: make a circuit ID returning method
 	
 	/**
 	 * Sends the given byte array along the circuit associated with this RouterConnection
@@ -176,6 +175,7 @@ public class RouterConnection extends Connection {
 					case RELAY_BEGIN:
 						
 						// LOOK IN ROUTING TABLE
+						
 						//String[] relayInformation = CellFormatter
 						
 						// IF CONNECTION NOT PRESENT 
