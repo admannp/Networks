@@ -27,7 +27,6 @@ import java.util.Scanner;
  */
 
 
-
 import java.util.TreeMap;
 
 import registrationProtocol.RegistrationHandler;
@@ -353,11 +352,9 @@ public class Router {
 		System.out.println("Registering router as router number: " + instanceNumber);
 		RegistrationHandler registrationHandler = new RegistrationHandler(registrationServiceAddress, registrationPortInt);
 		int groupNum = Integer.parseInt(groupNumber);
-		int groupNumHex = Integer.parseInt(groupNumber, 16);
 		int instanceNum = Integer.parseInt(instanceNumber);
-		int instanceNumHex = Integer.parseInt(instanceNumber, 16);
 		// Register this Tor61 router with given group and instance numbers, to be contacted at the given portNum
-		int ret = registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + (groupNumHex << 16 | instanceNumHex));
+		int ret = registrationHandler.register("Tor61Router-" + groupNum + "-" + instanceNum, getAddress(), "" + portNum, "" + (groupNum << 16 | instanceNum));
 		if (ret == -1) {
 			System.out.println("Node registration failed.");
 			return null;
@@ -399,10 +396,10 @@ public class Router {
 	 * 		   index 1
 	 */
 	private static int[] convertGroupStringToInts(String s) {
-		String hexGroup = Integer.toHexString(Integer.parseInt(s));
-		String instanceNumber = hexGroup.substring(hexGroup.length() - 4, hexGroup.length());
-		String groupNumber = hexGroup.substring(0, hexGroup.length() - 4);
-		return new int[] {Integer.parseInt(instanceNumber), Integer.parseInt(groupNumber)};
+		int groupData = Integer.parseInt(s);
+		int instanceNumber = groupData & 0xffff;
+		int groupNumber = groupData >> 16;
+		return new int[] {instanceNumber, groupNumber};
 	}
 	
 	// Private class used in the routing table storing the necessary information
@@ -544,5 +541,4 @@ public class Router {
 		} 
 		return localAddress;
 	}
-
 }
