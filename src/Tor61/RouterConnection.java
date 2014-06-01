@@ -107,6 +107,7 @@ public class RouterConnection extends Connection {
 				Router.RoutingTableKey key;
 				String circuitID;
 				String thisIPAddress = socket.getInetAddress().toString().substring(1);
+				RoutingTableValue value;
 				switch(type) {
 					case OPEN:
 						// TODO: figure out how to do timeouts
@@ -176,18 +177,40 @@ public class RouterConnection extends Connection {
 						
 						// LOOK IN ROUTING TABLE
 						
-						//String[] relayInformation = CellFormatter
+						String[] relayInformation = CellFormatter.getRelayBeginInformation(incomingMessage);
+						circuitID = CellFormatter.getCircuitIDFromCell(incomingMessage);
+						
+						key = router.new RoutingTableKey(this.socket, circuitID);
 						
 						// IF CONNECTION NOT PRESENT 
-							// DROP IT
+						// DROP IT
+						if (!router.routingTable.keySet().contains(key)) {
+							System.out.println("Unable to route rellay begin; no entry in routing table");
+							System.exit(1);
+						}
+						
+						value = router.routingTable.get(key);
 						
 						// IF CONNECTION PRESENT
-							// change circuit ID
-							// forward data as specified in the routing table
-						
+						// change circuit ID
+						// forward data as specified in the routing table
+						if (value != null) {
+							
+							
+							
+							
+							
 						// IF CONNECTION IS NULL
-							// create da new proxyconnection and connect to the IP / port in the
-							// relay begin cell
+						// create da new proxyconnection and connect to the IP / port in the
+						// relay begin cell
+						} else {
+							
+						}
+						
+						
+						
+						
+						
 						
 						break;
 					case RELAY_DATA:
@@ -242,7 +265,7 @@ public class RouterConnection extends Connection {
 						System.out.println("Received RELAY_EXTEND on IP, port, circuitID: "+ socket.getInetAddress() + 
 								", " + socket.getPort() + ", " + previousCircuitID);
 						key = router.new RoutingTableKey(this.socket, previousCircuitID);
-						RoutingTableValue value = router.routingTable.get(key);
+						value = router.routingTable.get(key);
 						if (value != null) {
 							// Forward the information
 							System.out.println("Routing table has entry for next node to extend to: " + extendToAddress);
