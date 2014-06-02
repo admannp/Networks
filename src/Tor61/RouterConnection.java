@@ -215,8 +215,10 @@ public class RouterConnection implements Runnable {
 								Socket socketToServer = new Socket();
 								socketToServer.connect(new InetSocketAddress(relayInformation[0], port), 2000);
 								System.out.println("Connected to socket at Addr, port: " + socketToServer.getInetAddress() + " " + socketToServer.getPort());
-								ProxyConnection serverConnection = new ProxyConnection(socketToServer, router.node);
+								//ProxyConnection serverConnection = new ProxyConnection(socketToServer, router.node);
 								//new Thread(serverConnection.new ProxyConnectionReadBuffer(this.socket)).start();
+								ServerConnection serverConnection = new ServerConnection(socketToServer, this, circuitID);
+								new Thread(serverConnection).start();
 								router.node.streamTable.put(new StreamTableKey(circuitID, streamID), serverConnection);
 								byte[] relayConnected = CellFormatter.relayConnectedCell(circuitID, streamID);
 								// TODO: figure out why adding router.thisCircuit. makes this fail every time 

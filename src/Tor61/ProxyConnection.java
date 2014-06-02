@@ -13,7 +13,7 @@ import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class ProxyConnection implements Runnable {
+public class ProxyConnection extends Connection implements Runnable {
 	
 	Socket connection;
 	Node node;
