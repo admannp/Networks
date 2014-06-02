@@ -40,10 +40,12 @@ public class Proxy {
 			while (true) {
 				try {
 					Socket clientConnection = clientListener.accept();
-					System.out.println("Accepted new browser connection; building new ProxyConnection. LocalPort: " + clientConnection.getLocalPort());
-					ProxyConnection connection = new ProxyConnection(clientConnection, node);
+					System.out.println("Accepted new browser connection; building new browser connection. LocalPort: " + clientConnection.getLocalPort());
+					//ProxyConnection connection = new ProxyConnection(clientConnection, node);
+					//(new Thread(connection)).start();
+					BrowserConnection connection = new BrowserConnection(clientConnection, node);
 					(new Thread(connection)).start();
-					System.out.println("New ProxyConnection created in Proxy class");
+					System.out.println("New browser connection created in Proxy class");
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();

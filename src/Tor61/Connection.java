@@ -4,8 +4,10 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Queue;
 
 public class Connection {
+	private Queue<byte[]> writeBuffer;
 	protected DataInputStream inputStream;
 	protected DataOutputStream outputStream;
 	protected Socket socket;
