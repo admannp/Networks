@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import Tor61.CellFormatter.CellType;
 import Tor61.Router.RoutingTableKey;
 import Tor61.Router.RoutingTableValue;
 
@@ -92,6 +93,7 @@ public class RouterConnection implements Runnable {
 				byte buffer[] = new byte[512];
 				int bytesRead;
 				int totalBytesRead = 0;
+				System.out.println("IT IS VERY POSSIBLE THAT I AM BLOCKING HERE!");
 				while ((bytesRead = input.read(buffer)) != -1) {
 					totalBytesRead += bytesRead;
 					System.out.println("Beginning one iteration; bytesRead = " + bytesRead);
@@ -106,7 +108,8 @@ public class RouterConnection implements Runnable {
 					
 				//System.out.println(Arrays.toString(incomingMessage));
 				CellFormatter.CellType type = CellFormatter.determineType(incomingMessage);
-				System.out.println(type);
+				if (type != CellType.UNKNOWN)
+					System.out.println(type);
 				byte[] response;
 				Router.RoutingTableKey key;
 				String circuitID;
@@ -123,6 +126,7 @@ public class RouterConnection implements Runnable {
 						String[] IDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
 						response = CellFormatter.openedCell(IDs[0], IDs[1]);
 						System.out.println("Received open cell with IDs: " + IDs[0] + " " + IDs[1]);
+						System.out.println("Sending to :" + socket.getInetAddress() + socket.getPort());
 						send(response);
 						break;
 					case OPENED:
@@ -132,15 +136,16 @@ public class RouterConnection implements Runnable {
 						System.out.println("This socket's hash code(in RouterConnection): " + socket.hashCode());
 						String[] agentIDs = CellFormatter.getIDsFromOpenCell(incomingMessage);
 						System.out.println("ID: " + agentIDs[0] + agentIDs[1]);
+						System.out.println("Creating key associated with: " + agentIDs[0] + agentIDs[1]);
 						key = router.new RoutingTableKey(this.socket, agentIDs[0] + agentIDs[1]);
 						System.out.println("Key's hash (in RouterConnection): " + key.hashCode());
 						
-						System.out.println(router.requestResponseMap.containsKey(key));
-						System.out.println("Hashes for keys in requestResponseMap:");
-						for (RoutingTableKey keySetKey : router.requestResponseMap.keySet()) {
-							System.out.println("Key: " + keySetKey.hashCode());
-							System.out.println("This key is equal to what we want :" + (keySetKey.equals(key)));
-						}
+//						System.out.println(router.requestResponseMap.containsKey(key));
+//						System.out.println("Hashes for keys in requestResponseMap:");
+//						for (RoutingTableKey keySetKey : router.requestResponseMap.keySet()) {
+//							System.out.println("Key: " + keySetKey.hashCode());
+//							System.out.println("This key is equal to what we want :" + (keySetKey.equals(key)));
+//						}
 						
 						if (router.requestResponseMap.containsKey(key)) {
 							System.out.println("In here");
@@ -233,12 +238,7 @@ public class RouterConnection implements Runnable {
 							}
 							
 						}
-						
-						
-						
-						
-						
-						
+										
 						break;
 					case RELAY_DATA:
 						
@@ -378,7 +378,21 @@ public class RouterConnection implements Runnable {
 								byte[] createCell = CellFormatter.createCell("" + newCircuitID);
 								connectionToNode.send(createCell);
 								
-							} // TODO: deal with the case that it does not already have a connection
+							}  else  { 
+								// TODO: deal with the case that it does not already have a connection
+								System.out.println("Need to open a connection and create to new node");
+								
+								// GET THE IP AND PORT TO EXTEND TO
+								
+								
+								// CREATE AN OPEN TASK
+								OpenResponseTask opener = new OpenResponseTask(extendInformation, router, this, key, previousCircuitID);
+								router.requestResponseMap.put(key, opener.response);
+								//(new Thread(opener)).start();
+								opener.run();
+								
+								
+							}
 							
 						}
 										
@@ -402,7 +416,7 @@ public class RouterConnection implements Runnable {
 					case RELAY_EXTEND_FAILED:
 						break;
 					case UNKNOWN:
-						System.out.println("Unknown cell type received");
+						//System.out.println("Unknown cell type received");
 //						System.exit(0);
 						break;
 				}
@@ -465,11 +479,13 @@ public class RouterConnection implements Runnable {
 				if(!buffer.isEmpty()) {
 					System.out.println("Received data in write buffer for router connection at " + 
 										socket.getLocalAddress() + ", " + socket.getLocalPort());
+					System.out.println("Writing to: " + socket.getInetAddress() + " " + socket.getPort());
 					System.out.println("Now sending data.");
 					try {
 						byte[] cell = buffer.remove();
 						//System.out.println("Data to be sent: " + Arrays.toString(cell));
 						out.write(cell);
+						System.out.println("YOU WON'T SEE ME");
 					} catch (IOException e) {
 						System.out.println("Unable to write to output stream for router connection at: " +
 								socket.getLocalAddress() + ", " + socket.getLocalPort());

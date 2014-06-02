@@ -49,7 +49,7 @@ public class ServerConnection extends Connection implements Runnable {
 		System.out.println("RESPONSE TO INCOMING INFORMATION");
 		System.out.print(result);
 		// SEND BYTES ALONG THE CIRCUIT
-		byte[][] dataCells = CellFormatter.relayDataCell(returnCircuitID + "", streamID + "", result);
+		byte[][] dataCells = CellFormatter.relayDataCell(returnCircuitID + "", streamID + "", serverResponse.toByteArray());
 		for (int i = 0; i < dataCells.length; i++) {
 			returnCircuit.send(dataCells[i]);
 		}
