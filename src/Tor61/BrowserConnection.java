@@ -61,6 +61,8 @@ public class BrowserConnection extends Connection implements Runnable {
 			if(!writeBuffer.isEmpty()) {
 				
 				try {
+					
+					// Get the incoming cell
 					byte[] cell = writeBuffer.remove();
 					String streamID = CellFormatter.getStreamIDFromCell(cell);
 					CellFormatter.CellType messageType = CellFormatter.determineType(cell);
