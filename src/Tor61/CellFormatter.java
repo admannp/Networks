@@ -306,6 +306,42 @@ public class CellFormatter {
 	}
 	
 	/**
+	 * The relayDataCell takes in a circuit ID, stream ID, and some data, 
+	 * returning properly formatted Tor61 cells.
+	 * 
+	 * @param circuitID, a string representing the circuit ID
+	 * @param streamID, a string representing the stream ID
+	 * @param data, a byte[] representing the data to send in this cell
+	 * @return byte[][], a variable length array where each index contains a 
+	 * 		   512 byte array that is encoded as a relay data
+	 * 		   cell. Any unnecessary space in a cell is filled with
+	 * 		   zeroes.
+	 */
+	public static byte[][] relayDataCell(String circuitID, 
+			String streamID, byte[] data) {
+		byte[][] cells = new byte[(int) Math.ceil(data.length / 498.0)][512];
+		int currentCell = 0;
+		int from = 0;
+		while (from != data.length) {
+			int to = Math.min(498, data.length - from);
+			byte[] message = relayShell(circuitID, streamID);
+			// message [11-12] -> body length
+			byte[] bodyLengthBytes = intToByteArray(to);
+			for (int i = 2; i < bodyLengthBytes.length; i++) {
+				message[i + 9] = bodyLengthBytes[i];
+			}
+			// message [13] -> type of relay
+			message[13] = (byte) 0x02;
+			for (int i = 0; i < to; i++) {
+				message[i + 14] = data[i + from];
+			}
+			from += to;
+			cells[currentCell++] = message;
+		}
+		return cells;
+	}
+	
+	/**
 	 * The relayEndCell takes in a circuit ID and stream ID 
 	 * and returns a properly formatted Tor61 cell.
 	 * 
@@ -628,20 +664,23 @@ public class CellFormatter {
 	}
 	
 	public static void main(String[] args) {
-		/*byte[][] message = relayDataCell("321", "654", "testing all o'er dis place. Mmm.");
-		byte[] circID = new byte[] {0, 0, message[0][0], message[0][1]};
-		byte[] streamID = new byte[] {0, 0, message[0][3], message[0][4]};
-		byte[] bodyLength = new byte[] {0, 0, message[0][11], message[0][12]};
+		/*byte[][] message = relayDataCell("321", "654", "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis quis viverra massa. Vestibulum tincidunt, metus et dapibus iaculis, magna risus ullamcorper mauris, vitae gravida nisl elit vitae velit. Curabitur quis ultricies nibh. Pellentesque sed porttitor nisl. Quisque semper dolor nisl, at accumsan turpis fringilla euismod. Fusce dictum euismod purus eu tincidunt. Fusce quis urna nibh. Mauris ultricies viverra dui id eleifend. Suspendisse et metus sit amet dolor varius gravida. Praesent sed.".getBytes());
 		
-		int circuitIDnum = byteArrayToInt(circID);
-		int streamIDnum = byteArrayToInt(streamID);
-		int bodyLengthNum = byteArrayToInt(bodyLength);
-		String body = "";
-		for (int i = 0; i < bodyLengthNum; i++) {
-			body += (char) message[0][i + 14];
-		}
-		System.out.println(body);
-		System.out.println(isRelayDataFull(message[0]));*/
+		for (int i = 0; i < message.length; i++) {
+			byte[] circID = new byte[] {0, 0, message[i][0], message[i][1]};
+			byte[] streamID = new byte[] {0, 0, message[i][3], message[i][4]};
+			byte[] bodyLength = new byte[] {0, 0, message[i][11], message[i][12]};
+			
+			int circuitIDnum = byteArrayToInt(circID);
+			int streamIDnum = byteArrayToInt(streamID);
+			int bodyLengthNum = byteArrayToInt(bodyLength);
+			String body = "";
+			for (int j = 0; j < bodyLengthNum; j++) {
+				body += (char) message[i][j + 14];
+			}
+			System.out.println(body);
+			System.out.println(isRelayDataFull(message[i]));
+		}*/
 		//CellType type = determineType(new byte[] {0, 0, 0});
 		//byte[] message = relayExtendedCell("321", "789");
 		//String agents = getCircuitIDFromCell(message);
