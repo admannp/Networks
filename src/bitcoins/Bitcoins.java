@@ -30,6 +30,10 @@ public class Bitcoins {
 		
 		Security.addProvider(new BouncyCastleProvider());
 		
+		
+		// changed 	"new MessageDigest.getInstance("SHA-256")"
+		// to 		"MessageDigest.getInstance("SHA-256")"
+		// we are STUPIDDUMB 
 		MessageDigest mD = MessageDigest.getInstance("SHA-256");
 
 	}
