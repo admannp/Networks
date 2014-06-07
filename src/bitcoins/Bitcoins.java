@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -17,8 +18,9 @@ public class Bitcoins {
 	/**
 	 * @param args
 	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException 
 	 */
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws IOException, NoSuchAlgorithmException {
 		
 		Path path = Paths.get("bitcoins/transactionData-10000-3.bin");
 		byte[] fileBytes = Files.readAllBytes(path);
@@ -28,7 +30,7 @@ public class Bitcoins {
 		
 		Security.addProvider(new BouncyCastleProvider());
 		
-		MessageDigest mD = new MessageDigest.getInstance("SHA-256");
+		MessageDigest mD = MessageDigest.getInstance("SHA-256");
 
 	}
 
