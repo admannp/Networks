@@ -20,6 +20,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
 
@@ -60,7 +61,7 @@ public class Bitcoins {
 				"702UBNzmkkZyKbRKL/Bfc4EG8/Mt9Pd2xQlRyXCL9FnIFWHyhfIQtW+oBsGI5UhG\n" +
 				"I8B8MiPOMfb6d/PdK+vd4riUxHAvCkHW5Lw0szAD1RVGbkG/7qnzAgMBAAE=\n" +
 				"-----END RSA PUBLIC KEY-----")).toLowerCase());
-		ArrayList<byte[]> transactions = getTransactions(fileBytes);
+		HashMap<byte[], byte[]> transactions = getTransactions(fileBytes);
 		System.out.println("There are " + transactions.size() + " recorded transactions.");
 		
 	}
@@ -142,7 +143,7 @@ public class Bitcoins {
 	 * the genesis transaction.
 	 * @param fileBytes, a byte[] of the file contents
 	 */
-	private static ArrayList<byte[]> getTransactions(byte[] fileBytes) {
+	private static HashMap<byte[], byte[]> getTransactions(byte[] fileBytes) {
 		/*
 		 * First things first. We need to parse the genesis header out
 		 * and grab relevent information, like the transaction associated.
@@ -155,8 +156,8 @@ public class Bitcoins {
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		buffer.order(ByteOrder.LITTLE_ENDIAN);
 		// Store all of our transactions
-		ArrayList<byte[]> transactions = new ArrayList<byte[]>();
-		transactions.add(Arrays.copyOfRange(fileBytes, 90, 126));
+		HashMap<byte[], byte[]> transactions = new HashMap<byte[], byte[]>();
+		transactions.put(hash(Arrays.copyOfRange(fileBytes, 90, 126)), Arrays.copyOfRange(fileBytes, 90, 126));
 		// How many transactions are we dealing with here?
 		buffer.put(Arrays.copyOfRange(fileBytes, 126, 130));
 		int totalTransactions = buffer.getInt(0);
@@ -199,7 +200,9 @@ public class Bitcoins {
 			currentPosition += (36 * numOutputs);
 			if (DEBUG)
 				System.out.println("This transaction was " + (currentPosition - beginningPosition) + " bytes long.");
-			transactions.add(Arrays.copyOfRange(fileBytes, beginningPosition, currentPosition));
+			byte[] entireTransaction = Arrays.copyOfRange(fileBytes, beginningPosition, currentPosition);
+			byte[] keyInMap = hash(entireTransaction);
+			transactions.put(keyInMap, entireTransaction);
 			// Reset the beginning position for the next iteration
 			beginningPosition = currentPosition;
 		}
