@@ -1,5 +1,12 @@
 package bitcoins;
 
+/*
+ * Nick Adman & Colin Miller
+ * This program parses out a file containing information about
+ * CSE461-coin transactions, verifying which are legitimate and 
+ * which are not.
+ */
+
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -11,6 +18,7 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -21,6 +29,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 
 public class Bitcoins {
+	
+	// If DEBUG is true, prints out information as it computes
+	private static final boolean DEBUG = true;
 	
 	private static MessageDigest md;
 
@@ -34,6 +45,7 @@ public class Bitcoins {
 		Path path = Paths.get("transactionData-10000-3.bin");
 		byte[] fileBytes = Files.readAllBytes(path);
 		
+		// TODO: Remember to change this name or face the wrath Nat
 		PrintStream pS = new PrintStream(new File("REDME_BETCH"));
 		pS.write(fileBytes, 0, 82);
 		
@@ -48,21 +60,32 @@ public class Bitcoins {
 				"702UBNzmkkZyKbRKL/Bfc4EG8/Mt9Pd2xQlRyXCL9FnIFWHyhfIQtW+oBsGI5UhG\n" +
 				"I8B8MiPOMfb6d/PdK+vd4riUxHAvCkHW5Lw0szAD1RVGbkG/7qnzAgMBAAE=\n" +
 				"-----END RSA PUBLIC KEY-----")).toLowerCase());
-		
-		getTransactions(fileBytes);
+		ArrayList<byte[]> transactions = getTransactions(fileBytes);
+		System.out.println("There are " + transactions.size() + " recorded transactions.");
 		
 	}
 	
+	/*
+	 * Computes the dHash of byte[] given
+	 */
 	private static byte[] hash(byte[] hashMe) {
 		md.update(hashMe);
 		md.update(md.digest());
 		return md.digest();
 	}
 	
+	/*
+	 * Computes the dHash of String given
+	 */
 	private static byte[] hash(String hashMe) {
 		return hash(hashMe.getBytes());
 	}
 	
+	/**
+	 * Given a byte[][] of data blocks, returns the top hash using a merkle tree
+	 * @param data, a byte[][] to be hashed
+	 * @return byte[], the merkle hash
+	 */
 	private static byte[] merkleRootComputation(byte[][] data) {
 		// We use a queue to store the hashes as the tree is processed
 		Queue<byte[]> hashes = new LinkedList<byte[]>();
@@ -82,82 +105,109 @@ public class Bitcoins {
 		while(hashes.size() > 1) {
 			// Take the front two entries, concatenate them, hash the result,
 			// and then add it back into the queue.
-			System.out.println("--- Beginning iteration ---");
+			if (DEBUG)
+				System.out.println("--- Beginning iteration ---");
 			byte[] concatenation = null;
-			System.out.println("Beginning size of queue: " + hashes.size());
+			if (DEBUG)
+				System.out.println("Beginning size of queue: " + hashes.size());
 			int currentSize = hashes.size();
 			for (int i = 0; i < currentSize / 2; i++) {
 				byte[] firstEntry = hashes.remove();
-				System.out.println("Removed: " + DatatypeConverter.printHexBinary(firstEntry));
+				if (DEBUG)
+					System.out.println("Removed: " + DatatypeConverter.printHexBinary(firstEntry));
 				byte[] secondEntry = hashes.remove();
-				System.out.println("Removed: " + DatatypeConverter.printHexBinary(secondEntry));
+				if (DEBUG)
+					System.out.println("Removed: " + DatatypeConverter.printHexBinary(secondEntry));
 				concatenation = new byte[firstEntry.length + secondEntry.length];
 				System.arraycopy(firstEntry, 0, concatenation, 0, firstEntry.length);
 				System.arraycopy(secondEntry, 0, concatenation, firstEntry.length, secondEntry.length);
 				hashes.add(hash(concatenation));
-				System.out.println("Added: " + DatatypeConverter.printHexBinary(hash(concatenation)));
+				if (DEBUG)
+					System.out.println("Added: " + DatatypeConverter.printHexBinary(hash(concatenation)));
 				md.reset();
 			}
 			// If the size is odd, add in the last one again
 			if (hashes.size() % 2 == 1 && hashes.size() != 1) {
 				hashes.add(hash(concatenation));
 			}
-			System.out.println("Ending size of queue: " + hashes.size());
+			if (DEBUG)
+				System.out.println("Ending size of queue: " + hashes.size());
 		}
 		return hashes.remove();
 	}
 	
-	private static void getTransactions(byte[] fileBytes) {
-		byte[] genesisBlock = Arrays.copyOfRange(fileBytes, 0, 82);
-		ByteBuffer nickIsCool = ByteBuffer.allocate(100);
-		byte[] genesisTransactionCount = Arrays.copyOfRange(fileBytes, 82, 86);
+	/**
+	 * Given a byte[] representing the file of transactions, parses them out
+	 * into an ArrayList<byte[]> containing all the transactions, including
+	 * the genesis transaction.
+	 * @param fileBytes, a byte[] of the file contents
+	 */
+	private static ArrayList<byte[]> getTransactions(byte[] fileBytes) {
+		/*
+		 * First things first. We need to parse the genesis header out
+		 * and grab relevent information, like the transaction associated.
+		 * Since this is static, we'll use static numbers. For all the
+		 * other transactions, however, we'll grab those based on
+		 * how much space they take up.
+		 */
 		
-		short counts = (short) byteArrayToInt(new byte[]{
-				0, 0, genesisTransactionCount[0], genesisTransactionCount[1]
-		});
-		nickIsCool.putShort(counts);
-		nickIsCool.position(0);
-		nickIsCool.order(ByteOrder.LITTLE_ENDIAN);
-		System.out.println("Genesis Block Transaction Count: " + nickIsCool.getShort());
-
-		byte[] genesisTransactionInputs = Arrays.copyOfRange(fileBytes, 86, 88);
-		short inputs = (short) little2big(byteArrayToInt(new byte[]{
-				0, 0, genesisTransactionInputs[1], genesisTransactionInputs[0]
-		}));
-		nickIsCool.putShort(inputs);
-		nickIsCool.position(nickIsCool.position() - 2);
-
-		System.out.println("Genesis Transaction Inputs: " + nickIsCool.getShort());
+		// Makes it easy to go from little -> big endian
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		// Store all of our transactions
+		ArrayList<byte[]> transactions = new ArrayList<byte[]>();
+		transactions.add(Arrays.copyOfRange(fileBytes, 90, 126));
+		// How many transactions are we dealing with here?
+		buffer.put(Arrays.copyOfRange(fileBytes, 126, 130));
+		int totalTransactions = buffer.getInt(0);
+		if (DEBUG)
+			System.out.println("Number of transactions: " + totalTransactions);
 		
-		byte[] genesisTransactionOutputs = Arrays.copyOfRange(fileBytes, 88, 90);
-		
-		short outputs = (short) byteArrayToInt(new byte[]{
-				0, 0, genesisTransactionOutputs[1], genesisTransactionOutputs[0]
-		});
-		nickIsCool.putShort(outputs);
-		nickIsCool.position(nickIsCool.position() - 2);
-
-		System.out.println("Genesis Transaction Outputs: " + nickIsCool.getShort());
-		/*int outputs = byteArrayToInt(new byte[]{
-				0, 0, genesisTransactionOutputs[0], genesisTransactionOutputs[1]
-		});
-		System.out.println("Genesis Block outputs: " + outputs);*/
-		byte[] transactionCount = Arrays.copyOfRange(fileBytes, 126, 130);
-		int bigTotalTransactionCount = little2big(byteArrayToInt(transactionCount));
-		System.out.println("Number of transactions: " + bigTotalTransactionCount);
+		int beginningPosition = 130;
+		int currentPosition = 130;
+		for (int i = 0; i < totalTransactions; i++) {
+			// Reset the buffer for another round of fun!
+			buffer.position(0);
+			// Let's get the number of inputs, first.
+			buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
+			currentPosition += 2;
+			short numInputs = buffer.getShort(0);
+			if (DEBUG)
+				System.out.println("This transaction has " + numInputs + " inputs.");
+			// There are some number of inputs that are each variable length
+			// depending on the public key
+			for (short j = 0; j < numInputs; j++) {
+				// We know there are 32 + 2 + 128 = 162 bytes of offset until the
+				// short field containing the public key. Let's get that value.
+				currentPosition += 162;
+				buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
+				currentPosition += 2;
+				short keyLength = buffer.getShort(buffer.position() - 2);
+				// We now know the length of the key in this transaction.
+				currentPosition += keyLength;
+				if (DEBUG)
+					System.out.println("Length of the key is: " + keyLength);
+			}
+			// Now let's get the number of outputs
+			buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
+			currentPosition += 2;
+			short numOutputs = buffer.getShort(buffer.position() - 2);
+			if (DEBUG)
+				System.out.println("This transaction has " + numOutputs + " outputs.");
+			// Since the outputs are all 36 bytes long, we now know how far we
+			// have to go to get the whole transaction.
+			currentPosition += (36 * numOutputs);
+			if (DEBUG)
+				System.out.println("This transaction was " + (currentPosition - beginningPosition) + " bytes long.");
+			transactions.add(Arrays.copyOfRange(fileBytes, beginningPosition, currentPosition));
+			// Reset the beginning position for the next iteration
+			beginningPosition = currentPosition;
+		}
+		return transactions;
 	}
 	
-	private static int byteArrayToInt(byte[] b) {
-	    return   b[3] & 0xFF |
-	            (b[2] & 0xFF) << 8 |
-	            (b[1] & 0xFF) << 16 |
-	            (b[0] & 0xFF) << 24;
-	}
-	
-	private static int little2big(int i) {
-	    return((i&0xff)<<24)+((i&0xff00)<<8)+((i&0xff0000)>>8)+((i>>24)&0xff);
-	}
-	
+	// Made this by mistake. Not sure if we'll need it, but for now I'm keeping it.
+	// Made it because I'm STUPIDDUMB!!!!!
 	private static byte[][] parseBlockHeader(byte[] blockHeader) {
 		byte[] versionNumber = new byte[4];
 		for (int i = 0; i < 4; i++) {
