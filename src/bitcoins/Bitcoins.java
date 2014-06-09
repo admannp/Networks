@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
  */
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
@@ -30,16 +31,21 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Set;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.CipherOutputStream;
+import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.xml.bind.DatatypeConverter;
 
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openssl.PEMException;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 
@@ -47,9 +53,11 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 public class Bitcoins {
 	
 	// If DEBUG is true, prints out information as it computes
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	
 	private static MessageDigest md;
+	private static HashMap<ByteArrayWrapper, byte[]> transactions;
+	private static ByteArrayWrapper genesisTransactionKey;
 
 	/**
 	 * @param args
@@ -58,15 +66,17 @@ public class Bitcoins {
 	 * @throws InvalidKeyException 
 	 * @throws NoSuchPaddingException 
 	 * @throws NoSuchProviderException 
+	 * @throws BadPaddingException 
+	 * @throws IllegalBlockSizeException 
 	 */
-	public static void main(String[] args) throws IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException, NoSuchPaddingException {
+	public static void main(String[] args) 
+			throws IOException, NoSuchAlgorithmException, InvalidKeyException, 
+			NoSuchProviderException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException {
 		
 		Path path = Paths.get("transactionData-10000-3.bin");
 		byte[] fileBytes = Files.readAllBytes(path);
 		
-		// TODO: Remember to change this name or face the wrath Nat
-		PrintStream pS = new PrintStream(new File("REDME_BETCH"));
-		pS.write(fileBytes, 0, 82);
+		
 		
 		Security.addProvider(new BouncyCastleProvider());
 		
@@ -74,74 +84,58 @@ public class Bitcoins {
 		byte[][] testWords = { "a".getBytes(), "five".getBytes(), "word".getBytes(), "input".getBytes(), "example".getBytes() };
 		merkleRootComputation(testWords);
 
-		/*md.update("a".getBytes());
-		byte[] hash = md.digest();
-		System.out.println(bytesToHex(hash));
-		System.out.println("Size of hash: " + hash.length);*/
 		
-		String pubKey = "-----BEGIN RSA PUBLIC KEY-----\n" + 
-				"MIGJAoGBAN3MxXHcbc1VNKTOgdm7W+i/dVnjv8vYGlbkdaTKzYgi8rQm126Sri87\n" + 
-				"702UBNzmkkZyKbRKL/Bfc4EG8/Mt9Pd2xQlRyXCL9FnIFWHyhfIQtW+oBsGI5UhG\n" +
-				"I8B8MiPOMfb6d/PdK+vd4riUxHAvCkHW5Lw0szAD1RVGbkG/7qnzAgMBAAE=\n" +
-				"-----END RSA PUBLIC KEY-----";
-
-		System.out.println("Library solution: " + DatatypeConverter.printHexBinary(hash(pubKey)).toLowerCase());
-		
-		String privKey = "-----BEGIN RSA PRIVATE KEY-----\n" +
-				"MIICXAIBAAKBgQDbtl/Yo5SIQ22rmufsfQSv76257VOh0HNZTtUUQqUXyvQ1oZM8\n" +
-				"ycCAAQZtTRFqUzeA4Ur9OKnGzKUs6kg2DMc/f8d5YOs5oUVsKuU+6mtYVwzgen34\n" +
-				"RacVdJNV+SdBQv2IlT4PvEoMFMuRvSuLfYjy1XnaD3XW2MtO8KQ65zx9YQIDAQAB\n" +
-				"AoGAeBtAVftGTR8fKroponvNPig1vffgygpbpCyWCtdLzK/jxBWpmYdothDZZJLG\n" +
-				"vGr1YnzGM5rwJH7mpKEGDJX7rNVufTrcRIjquR2GFvhogNLr/I49XT2fehvgwjD1\n" +
-				"7IxaQYU43wFazCyW5iKrdeAlVQ0luKJjawWofBYmRSHRWUkCQQDufDjcWYFMzJam\n" +
-				"8CbCk6ZyM6jxcUOGfpzomHrK9NrCo/aryQ8Wuf0ka6IHaEJkX7CwSbGiRBfGtEex\n" +
-				"HDdz+AofAkEA69kz5z1rhSOhDONTpZEdnI6tYThpnD1EQnHqnffhjCYUTzj6OnNs\n" +
-				"BcaDnRz89QKFOaXR2V1hxPaeEvCd2lGIfwJAPFGvEAyTZ5lXgWG8a/psXvYyBN9g\n" +
-				"9OORTENEy5CixBg0i76O0nC4Vj3i/XyhTkHlrrD0/NW8LcXrXCCG5g4WgQJAUqig\n" +
-				"WUYcfeAb3MF7moZ+o1UaDP3RfdG3L7ZvLQgog48BBTcJ9Bxp2qhVjmYPfetxN+AW\n" +
-				"6SCiWH66rhaorFBxDwJBAMoGgm9cxUCYsl2FQugr+wL0Kx8ECI5727TEzCmuVFUx\n" +
-				"X+kXCiTBgiO0WtTnd/uQmtqcLi3w19ko2her4Ctm8/k=\n" +
-				"-----END RSA PRIVATE KEY-----\n";
-		
-		Reader fRd = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(pubKey.getBytes())));
-	    PEMParser parser = new PEMParser(fRd);
-	    
-	    
-	    RSAPublicKey myKey = null;
-	    Object o;
-	    while ((o = parser.readObject()) != null) {
-	         if (o instanceof SubjectPublicKeyInfo) {
-	            JcaPEMKeyConverter myConverter = new JcaPEMKeyConverter();
-	            myKey = (RSAPublicKey) myConverter.getPublicKey((SubjectPublicKeyInfo) o);
-	            BigInteger exponent = myKey.getPublicExponent();
-	            BigInteger modulus = myKey.getModulus();
-	            System.out.println("Exponent:");
-	            System.out.println(exponent);
-	            System.out.println("Modulus:");
-	            System.out.println(modulus);
-	         } else {
-	            System.out.println("Not an instance of SubjectPublicKeyInfo.");
-	         }
-	      }
-		
-		Cipher cipher = Cipher.getInstance("RSA");
-		cipher.init(Cipher.ENCRYPT_MODE, myKey);
-		ByteArrayOutputStream bOut = new ByteArrayOutputStream();
-		CipherOutputStream cOut = new CipherOutputStream(bOut, cipher);
-
-		cOut.write("plaintext".getBytes());
-		cOut.close();
-		
-		System.out.println(bOut.toString());
-
-		System.out.println("Library solution: " + DatatypeConverter.printHexBinary(hash("-----BEGIN RSA PUBLIC KEY-----\n" + 
-				"MIGJAoGBAN3MxXHcbc1VNKTOgdm7W+i/dVnjv8vYGlbkdaTKzYgi8rQm126Sri87\n" + 
-				"702UBNzmkkZyKbRKL/Bfc4EG8/Mt9Pd2xQlRyXCL9FnIFWHyhfIQtW+oBsGI5UhG\n" +
-				"I8B8MiPOMfb6d/PdK+vd4riUxHAvCkHW5Lw0szAD1RVGbkG/7qnzAgMBAAE=\n" +
-				"-----END RSA PUBLIC KEY-----")).toLowerCase());
-		HashMap<byte[], byte[]> transactions = getTransactions(fileBytes);
+		HashMap<ByteArrayWrapper, byte[]> transactions = getTransactions(fileBytes);
 		System.out.println("There are " + transactions.size() + " recorded transactions.");
+		byte[][] transactionArray = new byte[transactions.size()][];
+		int i = 0;
+		for (ByteArrayWrapper key : transactions.keySet()) {
+			transactionArray[i] = key.data;
+			i++;
+		}
+		writeShitPlease(fileBytes, transactionArray);
 		
+		
+		
+		
+	}
+	
+	private static void writeShitPlease(byte[] fileBytes, byte[][] arrayOfTransactions) throws IOException {
+		PrintStream pS = new PrintStream(new File("outtt"));
+		System.out.println(Arrays.toString(Arrays.copyOfRange(fileBytes, 0, 82)));
+		pS.write(fileBytes, 0, 82);
+		pS.write(transactions.get(genesisTransactionKey));
+		System.out.println(Arrays.toString(transactions.get(genesisTransactionKey)));
+		transactions.remove(genesisTransactionKey);
+		byte[] header = writeHeader(pS, fileBytes, arrayOfTransactions);
+		pS.write(header);
+		//byte[] coinbaseTransaction = writeCoinbase();
+		for (byte[] transaction : arrayOfTransactions) {
+			pS.write(transaction);
+		}
+		
+	}
+	
+	private static byte[] writeCoinbase() {
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		buffer.putShort((short) 1);
+		buffer.put(genesisTransactionKey.data);
+		//buffer.put
+		return null;
+	}
+	
+	private static byte[] writeHeader(PrintStream pS, byte[] fileBytes, byte[][] transactions) {
+		ByteBuffer buffer = ByteBuffer.allocate(82);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		buffer.putInt(1);
+		buffer.put(hash(Arrays.copyOfRange(fileBytes, 0, 82)));
+		buffer.put(merkleRootComputation(transactions));
+		buffer.putInt((int) (System.currentTimeMillis() / 1000L));
+		buffer.putShort((short) 2);
+		buffer.putInt(00000000);
+		buffer.putInt(00000000);
+		return buffer.array();
 	}
 	
 	/*
@@ -220,8 +214,19 @@ public class Bitcoins {
 	 * into an ArrayList<byte[]> containing all the transactions, including
 	 * the genesis transaction.
 	 * @param fileBytes, a byte[] of the file contents
+	 * @throws IOException 
+	 * @throws NoSuchProviderException 
+	 * @throws BadPaddingException 
+	 * @throws IllegalBlockSizeException 
+	 * @throws NoSuchPaddingException 
+	 * @throws NoSuchAlgorithmException 
+	 * @throws PEMException 
+	 * @throws InvalidKeyException 
 	 */
-	private static HashMap<byte[], byte[]> getTransactions(byte[] fileBytes) {
+	private static HashMap<ByteArrayWrapper, byte[]> getTransactions(byte[] fileBytes) 
+			throws InvalidKeyException, PEMException, NoSuchAlgorithmException, 
+			NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, 
+			NoSuchProviderException, IOException {
 		/*
 		 * First things first. We need to parse the genesis header out
 		 * and grab relevent information, like the transaction associated.
@@ -234,8 +239,17 @@ public class Bitcoins {
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		buffer.order(ByteOrder.LITTLE_ENDIAN);
 		// Store all of our transactions
-		HashMap<byte[], byte[]> transactions = new HashMap<byte[], byte[]>();
-		transactions.put(hash(Arrays.copyOfRange(fileBytes, 90, 126)), Arrays.copyOfRange(fileBytes, 90, 126));
+		transactions = new HashMap<ByteArrayWrapper, byte[]>();
+		
+		// Add gensis transaction
+		byte[] genesisHash = hash(Arrays.copyOfRange(fileBytes, 86, 126));
+		genesisTransactionKey = new ByteArrayWrapper(genesisHash);
+		transactions.put(genesisTransactionKey, Arrays.copyOfRange(fileBytes, 86, 126));
+		 
+		System.out.println(Arrays.toString(genesisHash));
+		
+		Set<byte[]> usedOutputs = new HashSet<byte[]>();
+		
 		// How many transactions are we dealing with here?
 		buffer.put(Arrays.copyOfRange(fileBytes, 126, 130));
 		int totalTransactions = buffer.getInt(0);
@@ -244,29 +258,93 @@ public class Bitcoins {
 		
 		int beginningPosition = 130;
 		int currentPosition = 130;
+		
+		// Looping through given transactions
 		for (int i = 0; i < totalTransactions; i++) {
+			
 			// Reset the buffer for another round of fun!
 			buffer.position(0);
 			// Let's get the number of inputs, first.
 			buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
 			currentPosition += 2;
 			short numInputs = buffer.getShort(0);
-			if (DEBUG)
+			if (DEBUG) {
 				System.out.println("This transaction has " + numInputs + " inputs.");
-			// There are some number of inputs that are each variable length
-			// depending on the public key
+			}
+			
+			// Let's get the size of this transaction, first.
+			int transactionEndPosition = currentPosition;
 			for (short j = 0; j < numInputs; j++) {
+				buffer.put(Arrays.copyOfRange(fileBytes, transactionEndPosition + 162, transactionEndPosition + 164));
+				short length = buffer.getShort(buffer.position() - 2);
+				transactionEndPosition += 164 + length;
+			}
+			buffer.put(Arrays.copyOfRange(fileBytes, transactionEndPosition, transactionEndPosition + 2));
+			transactionEndPosition += 2;
+			short sumOutputs = buffer.getShort(buffer.position() - 2);
+			transactionEndPosition += (36 * sumOutputs);
+			
+			byte[] curTransaction = Arrays.copyOfRange(fileBytes, currentPosition - 2, transactionEndPosition);
+			
+			System.out.println("Current position: " + currentPosition);
+			System.out.println("transactionEndPosition: " + transactionEndPosition);
+			
+			// sizePosition now contains the length of the transaction
+			
+			// Initializing the running input sum for this transaction
+			// "value" used as flag
+			// Initialize set of outputs used by this transaction
+			int inputSum = 0;
+			Set<byte[]> curOutputs = new HashSet<byte[]>();
+			
+			boolean isValid = true;
+			
+			// Looping through inputs
+			for (short j = 0; j < numInputs; j++) {
+				
+				// Check that the given output has not been used before
+				byte[] prevTxRefAndIndex = Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 34);
+				if (usedOutputs.contains(prevTxRefAndIndex) || curOutputs.contains(prevTxRefAndIndex)) {
+					isValid = false;
+				}
+				
 				// We know there are 32 + 2 + 128 = 162 bytes of offset until the
 				// short field containing the public key. Let's get that value.
-				currentPosition += 162;
+				// Let's get the prevTxRef first.
+				byte[] prevTxRef = Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 32);
+				System.out.println(Arrays.toString(prevTxRef));
+				currentPosition += 32;
+				// Next, we'll get the prevTxOutputIndex
+				buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
+				currentPosition += 2;
+				short prevTxOutputIndex = buffer.getShort(buffer.position() - 2);
+				// Signature
+				byte[] signature = Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 128);
+				currentPosition += 128;
 				buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
 				currentPosition += 2;
 				short keyLength = buffer.getShort(buffer.position() - 2);
 				// We now know the length of the key in this transaction.
+				byte[] publicKey = Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + keyLength);
 				currentPosition += keyLength;
+				System.out.println("Current position: " + currentPosition);
+
+				
+				// Check the output for this input
+				int value = checkOutputReference(prevTxRef, prevTxOutputIndex, publicKey, signature, curTransaction);
+				if (value == -1) {
+					isValid = false;
+				}
+				
+				// Update running sum, add to the current outputs set
+				inputSum += value;
+				curOutputs.add(prevTxRefAndIndex);
+				// Update
+				
 				if (DEBUG)
 					System.out.println("Length of the key is: " + keyLength);
 			}
+			
 			// Now let's get the number of outputs
 			buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
 			currentPosition += 2;
@@ -276,17 +354,175 @@ public class Bitcoins {
 			// Since the outputs are all 36 bytes long, we now know how far we
 			// have to go to get the whole transaction.
 			currentPosition += (36 * numOutputs);
-			if (DEBUG)
+			if (DEBUG) {
+				System.out.println("current position: " + currentPosition);
+				System.out.println("beginning position: " + beginningPosition);
 				System.out.println("This transaction was " + (currentPosition - beginningPosition) + " bytes long.");
-			byte[] entireTransaction = Arrays.copyOfRange(fileBytes, beginningPosition, currentPosition);
+			}
+			// Get the entire transaction
+			byte[] entireTransaction = Arrays.copyOfRange(fileBytes, beginningPosition, currentPosition);		
 			byte[] keyInMap = hash(entireTransaction);
-			transactions.put(keyInMap, entireTransaction);
-			// Reset the beginning position for the next iteration
 			beginningPosition = currentPosition;
+			
+			
+			// Check value of parsing current input before adding to the map out valid transactions
+			if (isValid) {
+				transactions.put(new ByteArrayWrapper(keyInMap), entireTransaction);
+				for (byte[] outputPair : curOutputs) 
+					usedOutputs.add(outputPair);
+			}
+			// Reset the beginning position for the next iteration
+			
 		}
 		return transactions;
 	}
 	
+	private static int checkOutputReference(byte[] prevTxRef, short index, byte[] pubKey, byte[] signature, byte[] curTransaction) 
+			throws InvalidKeyException, PEMException, NoSuchAlgorithmException, NoSuchPaddingException, 
+			IllegalBlockSizeException, BadPaddingException, NoSuchProviderException, IOException {
+		byte[] prevTx = transactions.get(new ByteArrayWrapper(prevTxRef));
+		if (prevTx == null) {
+			System.out.println("NULL");
+			return -1;
+		}
+		
+		byte[] output = getOutputAtIndex(prevTx, index);
+		if (output == null) {
+			return -1;
+		}
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		buffer.put(Arrays.copyOfRange(output, 0, 4));
+		int value = buffer.getInt(buffer.position() - 4);
+		
+		if (!Arrays.equals(hash(pubKey), Arrays.copyOfRange(output, 4, 36))) {
+			System.out.println("HASHES NOT EQUAL");
+			return -1;
+		}
+		
+		if (!checkSignature(pubKey, curTransaction, signature)) {
+			System.out.println("SIGNATURE NOT CORRECT");
+			return -1;
+		}
+		
+		return value;
+	}
+	
+	private static boolean checkSignature(byte[] pubKey, byte[] transaction, byte[] signature) throws InvalidKeyException, 
+			PEMException, IOException, NoSuchAlgorithmException, NoSuchPaddingException, IllegalBlockSizeException, 
+			BadPaddingException, NoSuchProviderException {
+		
+		Reader fRd = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(pubKey)));
+	    PEMParser parser = new PEMParser(fRd);
+	    
+	    
+	    RSAPublicKey myKey = null;
+	    Object o;
+	    while ((o = parser.readObject()) != null) {
+	         if (o instanceof SubjectPublicKeyInfo) {
+	            JcaPEMKeyConverter myConverter = new JcaPEMKeyConverter();
+	            myKey = (RSAPublicKey) myConverter.getPublicKey((SubjectPublicKeyInfo) o);
+	            BigInteger exponent = myKey.getPublicExponent();
+	            BigInteger modulus = myKey.getModulus();
+	            System.out.println("Exponent:");
+	            System.out.println(exponent);
+	            System.out.println("Modulus:");
+	            System.out.println(modulus);
+	         } else {
+	            System.out.println("Not an instance of SubjectPublicKeyInfo.");
+	         }
+	     }
+		
+		Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding", "BC");
+		cipher.init(Cipher.DECRYPT_MODE, myKey);
+		
+		byte[] decrypted;
+		try {
+			 decrypted = cipher.doFinal(signature);
+		} catch (BadPaddingException e) {
+			return false;
+		}
+		
+		System.out.println(Arrays.toString(decrypted));
+		
+		byte[] transactionWithoutSignatures = transactionWithoutSignatures(transaction);
+		
+		System.out.println(Arrays.toString(hash(transactionWithoutSignatures)));
+		
+		return Arrays.equals(decrypted, hash(transactionWithoutSignatures));
+		
+	}
+	
+	// Given a transaction, returns a copy of the transaction without
+	// any of the signature bytes included
+	private static byte[] transactionWithoutSignatures(byte[] transaction) {
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		int currentPosition = 0;
+		buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+		short numInputs = buffer.getShort(buffer.position() - 2);
+		byte[] modifiedTransaction = new byte[transaction.length - (numInputs * 128)];
+		int modifiedPosition = 0;
+		for (int i = 0; i < 2 ; i++) {
+			modifiedTransaction[modifiedPosition] = transaction[currentPosition];
+			modifiedPosition++;
+			currentPosition++;
+		}
+		// Go through each input
+		for (short i = 0; i < numInputs; i++) {
+			// Copy the first 
+			for(int j = 0; j < 34; j++) {
+				modifiedTransaction[modifiedPosition] = transaction[currentPosition];
+				modifiedPosition++;
+				currentPosition++;
+			}
+			currentPosition += 128;
+			buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+			short length = buffer.getShort(buffer.position() - 2);
+			for (int j = 0; j <  2 + length; j++) {
+				modifiedTransaction[modifiedPosition] = transaction[currentPosition];
+				modifiedPosition++;
+				currentPosition++;
+			}
+		}
+		int bytesToGo = (transaction.length - currentPosition);
+		for (int i = 0; i < bytesToGo; i++) {
+			modifiedTransaction[modifiedPosition] = transaction[currentPosition];
+			modifiedPosition++;
+			currentPosition++;
+		}
+		return modifiedTransaction;
+	}
+	
+	// 
+	
+	// Returns the hashed public key of an output at an index, or null if that
+	// index does not exist.
+	private static byte[] getOutputAtIndex(byte[] transaction, short index) {
+		System.out.println("Getting at index " + index);
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		int currentPosition = 0;
+		buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+		short numInputs = buffer.getShort(buffer.position() - 2);
+		currentPosition += 2;
+		for (short i = 0; i < numInputs; i++) {
+			currentPosition += 162;
+			buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+			currentPosition += 2;
+			short keyLength = buffer.getShort(buffer.position() - 2);
+			currentPosition += keyLength;
+		}
+		buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+		currentPosition += 2;
+		short numOutputs = buffer.getShort(buffer.position() - 2);
+		if (index >= numOutputs) {
+			return null;
+		} else {
+			return Arrays.copyOfRange(transaction, currentPosition + (index * 36), currentPosition + (index * 36) + 36);
+		}
+	}
+
 	// Made this by mistake. Not sure if we'll need it, but for now I'm keeping it.
 	// Made it because I'm STUPIDDUMB!!!!!
 	private static byte[][] parseBlockHeader(byte[] blockHeader) {
@@ -316,5 +552,4 @@ public class Bitcoins {
 		}
 		return new byte[][] {versionNumber, prevBlockRef, merkleRoot, creationTime, difficulty, nonce};
 	}
-
 }
