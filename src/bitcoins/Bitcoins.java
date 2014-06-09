@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
 
@@ -58,6 +59,7 @@ public class Bitcoins {
 	private static MessageDigest md;
 	private static HashMap<ByteArrayWrapper, byte[]> transactions;
 	private static ByteArrayWrapper genesisTransactionKey;
+	private static HashMap<ByteArrayWrapper, Integer> balances;
 
 	/**
 	 * @param args
@@ -86,6 +88,77 @@ public class Bitcoins {
 		
 		write(fileBytes);
 		
+		balances = new HashMap<ByteArrayWrapper, Integer>();
+		//calculateBalances();
+		
+		for (Entry<ByteArrayWrapper, Integer> entry: balances.entrySet()) {
+			System.out.println(entry.getValue() + " " + entry.getValue());
+		}
+		
+	}
+	
+	private static void calculateBalances() {
+		// Put 10 in our account
+		byte[] keyHash = hash("-----BEGIN RSA PUBLIC KEY-----\n" + 
+				"MIGJAoGBAN3MxXHcbc1VNKTOgdm7W+i/dVnjv8vYGlbkdaTKzYgi8rQm126Sri87\n" +
+				"702UBNzmkkZyKbRKL/Bfc4EG8/Mt9Pd2xQlRyXCL9FnIFWHyhfIQtW+oBsGI5UhG\n" +
+				"I8B8MiPOMfb6d/PdK+vd4riUxHAvCkHW5Lw0szAD1RVGbkG/7qnzAgMBAAE=\n" +
+				"-----END RSA PUBLIC KEY-----");
+		ByteArrayWrapper ourKey = new ByteArrayWrapper(keyHash);
+		balances.put(ourKey, 10);
+		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		System.out.println("Considering " + transactions.values().size() + " transactions");
+		int iteration = 0;
+		for (byte[] transaction : transactions.values()) {
+			System.out.println("Iteration " + (++iteration));
+			buffer.position(0);
+			int currentPosition = 0;
+			buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+			currentPosition += 2;
+			short numInputs = buffer.getShort(buffer.position() - 2);
+			int totalInput = 0;
+			int totalOutput = 0;
+			// Get all the values of the inputs
+			for (int i = 0; i < numInputs; i++) {
+				buffer.put(Arrays.copyOfRange(transaction, currentPosition + 32, currentPosition + 34));
+				short outputIndex = buffer.getShort(buffer.position() - 2);
+				byte[] output = getOutputAtIndex(transaction, outputIndex);
+				buffer.put(Arrays.copyOfRange(output, 0, 4));
+				int value = buffer.getInt(buffer.position() - 4);
+				totalInput += value;
+				ByteArrayWrapper dHashKey = new ByteArrayWrapper(Arrays.copyOfRange(output, 4, 36));
+				if (balances.containsKey(dHashKey)) {
+					int prevValue = balances.get(dHashKey);
+					balances.put(dHashKey, prevValue - value);
+				} else {
+					balances.put(dHashKey, -value);
+				}
+				currentPosition += 162;
+				buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+				short keyLength = buffer.getShort(buffer.position() - 2);
+				currentPosition += keyLength + 2;
+			}
+			// Now do all the outputs
+			buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 2));
+			currentPosition += 2;
+			short numOutputs = buffer.getShort(buffer.position() - 2);
+			for (int i = 0; i < numOutputs; i++) {
+				buffer.put(Arrays.copyOfRange(transaction, currentPosition, currentPosition + 4));
+				int outputValue = buffer.getInt(buffer.position() - 4);
+				totalOutput += outputValue;
+				ByteArrayWrapper dHashKey = new ByteArrayWrapper(
+						Arrays.copyOfRange(transaction, currentPosition + 4, currentPosition + 36));
+				if (balances.containsKey(dHashKey)) {
+					balances.put(dHashKey, outputValue + balances.get(dHashKey));
+				} else {
+					balances.put(dHashKey, outputValue);
+				}
+				currentPosition += 36;
+			}
+			// Claim any extra stuff
+			balances.put(ourKey, balances.get(ourKey) + totalInput - totalOutput);
+		}
 	}
 	
 	private static void write(byte[] fileBytes) throws IOException {
