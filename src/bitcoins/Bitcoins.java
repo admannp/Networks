@@ -81,61 +81,92 @@ public class Bitcoins {
 		Security.addProvider(new BouncyCastleProvider());
 		
 		md = MessageDigest.getInstance("SHA-256");
-		byte[][] testWords = { "a".getBytes(), "five".getBytes(), "word".getBytes(), "input".getBytes(), "example".getBytes() };
-		merkleRootComputation(testWords);
-
 		
-		HashMap<ByteArrayWrapper, byte[]> transactions = getTransactions(fileBytes);
-		System.out.println("There are " + transactions.size() + " recorded transactions.");
-		byte[][] transactionArray = new byte[transactions.size()][];
-		int i = 0;
-		for (ByteArrayWrapper key : transactions.keySet()) {
-			transactionArray[i] = key.data;
-			i++;
-		}
-		writeShitPlease(fileBytes, transactionArray);
+		getTransactions(fileBytes);
 		
-		
-		
+		write(fileBytes);
 		
 	}
 	
-	private static void writeShitPlease(byte[] fileBytes, byte[][] arrayOfTransactions) throws IOException {
-		PrintStream pS = new PrintStream(new File("outtt"));
-		System.out.println(Arrays.toString(Arrays.copyOfRange(fileBytes, 0, 82)));
-		pS.write(fileBytes, 0, 82);
+	private static void write(byte[] fileBytes) throws IOException {
+		PrintStream pS = new PrintStream(new File("blockchain.bin"));
+		//System.out.println(Arrays.toString(Arrays.copyOfRange(fileBytes, 0, 82)));
+		pS.write(fileBytes, 0, 86);
 		pS.write(transactions.get(genesisTransactionKey));
-		System.out.println(Arrays.toString(transactions.get(genesisTransactionKey)));
+		//System.out.println("Genesis transaction: " + DatatypeConverter.printHexBinary(transactions.get(genesisTransactionKey)));
 		transactions.remove(genesisTransactionKey);
-		byte[] header = writeHeader(pS, fileBytes, arrayOfTransactions);
+		byte[] coinbaseTransaction = writeCoinbase();
+		byte[][] transactionArray = new byte[transactions.size() + 1][];
+		transactionArray[0] = coinbaseTransaction;
+		int i = 1;
+		for (ByteArrayWrapper key : transactions.keySet()) {
+			transactionArray[i] = transactions.get(key);
+			i++;
+		}
+		byte[][] test = new byte[1][];
+		test[0] = coinbaseTransaction;
+		byte[] header = writeHeader(fileBytes, transactionArray);
 		pS.write(header);
-		//byte[] coinbaseTransaction = writeCoinbase();
-		for (byte[] transaction : arrayOfTransactions) {
-			pS.write(transaction);
+		
+		// TODO: comment out this for loop 
+		for (byte[] transaction : transactionArray) {
+			pS.write(transaction, 0, transaction.length);
 		}
 		
 	}
 	
 	private static byte[] writeCoinbase() {
-		ByteBuffer buffer = ByteBuffer.allocate(1024);
+		ByteBuffer buffer = ByteBuffer.allocate(40);
 		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		buffer.putShort((short) 0);
 		buffer.putShort((short) 1);
-		buffer.put(genesisTransactionKey.data);
-		//buffer.put
-		return null;
+		// TODO: get this value from a real place
+		buffer.putInt(4922);
+		String pubKey = "-----BEGIN RSA PUBLIC KEY-----\n" + 
+				"MIGJAoGBAN3MxXHcbc1VNKTOgdm7W+i/dVnjv8vYGlbkdaTKzYgi8rQm126Sri87\n" +
+				"702UBNzmkkZyKbRKL/Bfc4EG8/Mt9Pd2xQlRyXCL9FnIFWHyhfIQtW+oBsGI5UhG\n" +
+				"I8B8MiPOMfb6d/PdK+vd4riUxHAvCkHW5Lw0szAD1RVGbkG/7qnzAgMBAAE=\n" +
+				"-----END RSA PUBLIC KEY-----";
+		buffer.put(hash(pubKey));
+		return buffer.array();
 	}
 	
-	private static byte[] writeHeader(PrintStream pS, byte[] fileBytes, byte[][] transactions) {
-		ByteBuffer buffer = ByteBuffer.allocate(82);
+	private static byte[] writeHeader(byte[] fileBytes, byte[][] transactions) {
+		ByteBuffer buffer = ByteBuffer.allocate(86);
+		long nonce = Long.MIN_VALUE;
 		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		byte[] header = new byte[82];
 		buffer.putInt(1);
 		buffer.put(hash(Arrays.copyOfRange(fileBytes, 0, 82)));
 		buffer.put(merkleRootComputation(transactions));
 		buffer.putInt((int) (System.currentTimeMillis() / 1000L));
-		buffer.putShort((short) 2);
-		buffer.putInt(00000000);
-		buffer.putInt(00000000);
+		buffer.putShort((short) 3);
+		buffer.position(0);
+		buffer.get(header, 0, header.length);
+		do {
+			nonce++; 
+			buffer.position(0);
+			buffer.put(header);
+			buffer.position(74);
+			buffer.putLong(nonce);
+			buffer.position(0);
+			buffer.get(header, 0, header.length);
+		 } while(!checkNonce(hash(header), 3));
+
+		buffer.position(0);
+		buffer.put(header);
+		buffer.putInt(transactions.length);
+		//System.out.println("Transactions length: " + transactions.length);
 		return buffer.array();
+	}
+	
+	private static boolean checkNonce(byte[] header, int difficulty) {
+		for (int i = 0; i < difficulty; i++) {
+			if (header[i] != 0) 
+				return false;
+		}
+		//System.out.println(Arrays.toString(header));
+		return true;
 	}
 	
 	/*
@@ -167,6 +198,11 @@ public class Bitcoins {
 			md.reset();
 		}
 		
+		// If there is just one entry, return
+		if (data.length == 1) {
+			return hashes.remove();
+		}
+		
 		// If there are an odd number of entries, add the last one twice
 		if (data.length % 2 == 1) {
 			hashes.add(hash(data[data.length - 1]));
@@ -178,33 +214,39 @@ public class Bitcoins {
 		while(hashes.size() > 1) {
 			// Take the front two entries, concatenate them, hash the result,
 			// and then add it back into the queue.
-			if (DEBUG)
-				System.out.println("--- Beginning iteration ---");
+			if (DEBUG){
+				//System.out.println("--- Beginning iteration ---");
+			}
 			byte[] concatenation = null;
-			if (DEBUG)
-				System.out.println("Beginning size of queue: " + hashes.size());
+			if (DEBUG) {
+				//System.out.println("Beginning size of queue: " + hashes.size());
+			}
 			int currentSize = hashes.size();
 			for (int i = 0; i < currentSize / 2; i++) {
 				byte[] firstEntry = hashes.remove();
-				if (DEBUG)
-					System.out.println("Removed: " + DatatypeConverter.printHexBinary(firstEntry));
+				if (DEBUG) {
+					//System.out.println("Removed: " + DatatypeConverter.printHexBinary(firstEntry));
+				}
 				byte[] secondEntry = hashes.remove();
-				if (DEBUG)
-					System.out.println("Removed: " + DatatypeConverter.printHexBinary(secondEntry));
+				if (DEBUG) {
+					//System.out.println("Removed: " + DatatypeConverter.printHexBinary(secondEntry));
+				}
 				concatenation = new byte[firstEntry.length + secondEntry.length];
 				System.arraycopy(firstEntry, 0, concatenation, 0, firstEntry.length);
 				System.arraycopy(secondEntry, 0, concatenation, firstEntry.length, secondEntry.length);
 				hashes.add(hash(concatenation));
-				if (DEBUG)
-					System.out.println("Added: " + DatatypeConverter.printHexBinary(hash(concatenation)));
+				if (DEBUG) {
+					//System.out.println("Added: " + DatatypeConverter.printHexBinary(hash(concatenation)));
+				}
 				md.reset();
 			}
 			// If the size is odd, add in the last one again
 			if (hashes.size() % 2 == 1 && hashes.size() != 1) {
 				hashes.add(hash(concatenation));
 			}
-			if (DEBUG)
-				System.out.println("Ending size of queue: " + hashes.size());
+			if (DEBUG) {
+				//System.out.println("Ending size of queue: " + hashes.size());
+			}
 		}
 		return hashes.remove();
 	}
@@ -246,15 +288,16 @@ public class Bitcoins {
 		genesisTransactionKey = new ByteArrayWrapper(genesisHash);
 		transactions.put(genesisTransactionKey, Arrays.copyOfRange(fileBytes, 86, 126));
 		 
-		System.out.println(Arrays.toString(genesisHash));
+		//System.out.println(Arrays.toString(genesisHash));
 		
 		Set<byte[]> usedOutputs = new HashSet<byte[]>();
 		
 		// How many transactions are we dealing with here?
 		buffer.put(Arrays.copyOfRange(fileBytes, 126, 130));
 		int totalTransactions = buffer.getInt(0);
-		if (DEBUG)
-			System.out.println("Number of transactions: " + totalTransactions);
+		if (DEBUG) {
+			//System.out.println("Number of transactions: " + totalTransactions);
+		}
 		
 		int beginningPosition = 130;
 		int currentPosition = 130;
@@ -269,7 +312,7 @@ public class Bitcoins {
 			currentPosition += 2;
 			short numInputs = buffer.getShort(0);
 			if (DEBUG) {
-				System.out.println("This transaction has " + numInputs + " inputs.");
+				//System.out.println("This transaction has " + numInputs + " inputs.");
 			}
 			
 			// Let's get the size of this transaction, first.
@@ -286,8 +329,8 @@ public class Bitcoins {
 			
 			byte[] curTransaction = Arrays.copyOfRange(fileBytes, currentPosition - 2, transactionEndPosition);
 			
-			System.out.println("Current position: " + currentPosition);
-			System.out.println("transactionEndPosition: " + transactionEndPosition);
+			//System.out.println("Current position: " + currentPosition);
+			//System.out.println("transactionEndPosition: " + transactionEndPosition);
 			
 			// sizePosition now contains the length of the transaction
 			
@@ -312,7 +355,7 @@ public class Bitcoins {
 				// short field containing the public key. Let's get that value.
 				// Let's get the prevTxRef first.
 				byte[] prevTxRef = Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 32);
-				System.out.println(Arrays.toString(prevTxRef));
+				//System.out.println(Arrays.toString(prevTxRef));
 				currentPosition += 32;
 				// Next, we'll get the prevTxOutputIndex
 				buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
@@ -327,7 +370,7 @@ public class Bitcoins {
 				// We now know the length of the key in this transaction.
 				byte[] publicKey = Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + keyLength);
 				currentPosition += keyLength;
-				System.out.println("Current position: " + currentPosition);
+				//System.out.println("Current position: " + currentPosition);
 
 				
 				// Check the output for this input
@@ -341,23 +384,25 @@ public class Bitcoins {
 				curOutputs.add(prevTxRefAndIndex);
 				// Update
 				
-				if (DEBUG)
-					System.out.println("Length of the key is: " + keyLength);
+				if (DEBUG) {
+					//System.out.println("Length of the key is: " + keyLength);
+				}
 			}
 			
 			// Now let's get the number of outputs
 			buffer.put(Arrays.copyOfRange(fileBytes, currentPosition, currentPosition + 2));
 			currentPosition += 2;
 			short numOutputs = buffer.getShort(buffer.position() - 2);
-			if (DEBUG)
-				System.out.println("This transaction has " + numOutputs + " outputs.");
+			if (DEBUG) {
+				//System.out.println("This transaction has " + numOutputs + " outputs.");
+			}
 			// Since the outputs are all 36 bytes long, we now know how far we
 			// have to go to get the whole transaction.
 			currentPosition += (36 * numOutputs);
 			if (DEBUG) {
-				System.out.println("current position: " + currentPosition);
-				System.out.println("beginning position: " + beginningPosition);
-				System.out.println("This transaction was " + (currentPosition - beginningPosition) + " bytes long.");
+				//System.out.println("current position: " + currentPosition);
+				//System.out.println("beginning position: " + beginningPosition);
+				//System.out.println("This transaction was " + (currentPosition - beginningPosition) + " bytes long.");
 			}
 			// Get the entire transaction
 			byte[] entireTransaction = Arrays.copyOfRange(fileBytes, beginningPosition, currentPosition);		
@@ -382,7 +427,7 @@ public class Bitcoins {
 			IllegalBlockSizeException, BadPaddingException, NoSuchProviderException, IOException {
 		byte[] prevTx = transactions.get(new ByteArrayWrapper(prevTxRef));
 		if (prevTx == null) {
-			System.out.println("NULL");
+			//System.out.println("NULL");
 			return -1;
 		}
 		
@@ -396,12 +441,12 @@ public class Bitcoins {
 		int value = buffer.getInt(buffer.position() - 4);
 		
 		if (!Arrays.equals(hash(pubKey), Arrays.copyOfRange(output, 4, 36))) {
-			System.out.println("HASHES NOT EQUAL");
+			//System.out.println("HASHES NOT EQUAL");
 			return -1;
 		}
 		
 		if (!checkSignature(pubKey, curTransaction, signature)) {
-			System.out.println("SIGNATURE NOT CORRECT");
+			//System.out.println("SIGNATURE NOT CORRECT");
 			return -1;
 		}
 		
@@ -424,12 +469,12 @@ public class Bitcoins {
 	            myKey = (RSAPublicKey) myConverter.getPublicKey((SubjectPublicKeyInfo) o);
 	            BigInteger exponent = myKey.getPublicExponent();
 	            BigInteger modulus = myKey.getModulus();
-	            System.out.println("Exponent:");
-	            System.out.println(exponent);
-	            System.out.println("Modulus:");
-	            System.out.println(modulus);
+	            //System.out.println("Exponent:");
+	            //System.out.println(exponent);
+	            //System.out.println("Modulus:");
+	            //System.out.println(modulus);
 	         } else {
-	            System.out.println("Not an instance of SubjectPublicKeyInfo.");
+	            //System.out.println("Not an instance of SubjectPublicKeyInfo.");
 	         }
 	     }
 		
@@ -443,11 +488,11 @@ public class Bitcoins {
 			return false;
 		}
 		
-		System.out.println(Arrays.toString(decrypted));
+		//System.out.println(Arrays.toString(decrypted));
 		
 		byte[] transactionWithoutSignatures = transactionWithoutSignatures(transaction);
 		
-		System.out.println(Arrays.toString(hash(transactionWithoutSignatures)));
+		//System.out.println(Arrays.toString(hash(transactionWithoutSignatures)));
 		
 		return Arrays.equals(decrypted, hash(transactionWithoutSignatures));
 		
@@ -499,7 +544,7 @@ public class Bitcoins {
 	// Returns the hashed public key of an output at an index, or null if that
 	// index does not exist.
 	private static byte[] getOutputAtIndex(byte[] transaction, short index) {
-		System.out.println("Getting at index " + index);
+		//System.out.println("Getting at index " + index);
 		ByteBuffer buffer = ByteBuffer.allocate(1024);
 		buffer.order(ByteOrder.LITTLE_ENDIAN);
 		int currentPosition = 0;
